@@ -1,22 +1,22 @@
-# Contoso AKS Infrastructure Deployment Guide
+# Enrollment AKS Infrastructure Deployment Guide
 
 ## Architecture Overview
 
 ### Applications
-1. **Contoso Angular** - Web application accessible from the internet
-2. **Contoso SPA API** - Handles workflow orchestration (called by Angular app via CORS)
-3. **Contoso API** - Public-facing API (called by Angular app via CORS) → communicates with Backend API 1
-4. **Contoso Kendo Grid API** - Public-facing API (called by Angular app via CORS) → communicates with Backend API 2
-5. **Contoso BSL** - Internal API (called by Contoso API)
-6. **Contoso Kendo Grid BSL** - Internal API (called by Contoso Kendo Grid API)
+1. **Enrollment Angular** - Web application accessible from the internet
+2. **Enrollment SPA API** - Handles workflow orchestration (called by Angular app via CORS)
+3. **Enrollment API** - Public-facing API (called by Angular app via CORS) → communicates with Backend API 1
+4. **Enrollment Kendo Grid API** - Public-facing API (called by Angular app via CORS) → communicates with Backend API 2
+5. **Enrollment BSL** - Internal API (called by Enrollment API)
+6. **Enrollment Kendo Grid BSL** - Internal API (called by Enrollment Kendo Grid API)
 
 ### Communication Flow
 ```
-Internet → Ingress → Contoso Angular
+Internet → Ingress → Enrollment Angular
                   ↓ (CORS)
-                  → Contoso SPA API
-                  → Contoso API → Backend API 1
-                  → Contoso Kendo Grid API → Backend API 2
+                  → Enrollment SPA API
+                  → Enrollment API → Backend API 1
+                  → Enrollment Kendo Grid API → Backend API 2
 ```
 
 ## Prerequisites
@@ -57,34 +57,34 @@ az login
 az account set --subscription "Your-Subscription-Name"
 
 # Create resource group
-az group create --name rg-contoso-aks --location eastus2
+az group create --name rg-enrollment-aks --location eastus2
 
 # Update the parameters file with your SSH public key
 # Edit main.bicepparam and replace the sshPublicKey value with your public key:
 #cat ~/.ssh/id_rsa.pub
-az sshkey create --name "contosoAksSSHKey" --resource-group rg-contoso-aks
+az sshkey create --name "enrollmentAksSSHKey" --resource-group rg-enrollment-aks
 
 # Deploy the infrastructure
 az deployment group create \
-  --resource-group rg-contoso-aks \
+  --resource-group rg-enrollment-aks \
   --template-file main.bicep \
   --parameters main.bicepparam
 
 # Save the outputs (you'll need these later)
 az deployment group show \
-  --resource-group rg-contoso-aks \
+  --resource-group rg-enrollment-aks \
   --name main \
   --query properties.outputs
 ```
 
 ### Step 2: Configure kubectl Access
 
-AKS_CLUSTER_NAMe=(az deployment group show --resource-group rg-contoso-aks --name main --query properties.outputs.aksClusterName.value -o tsv)
+AKS_CLUSTER_NAMe=(az deployment group show --resource-group rg-enrollment-aks --name main --query properties.outputs.aksClusterName.value -o tsv)
 
 ```bash
 # Get AKS credentials
 az aks get-credentials \
-  --resource-group rg-contoso-aks \
+  --resource-group rg-enrollment-aks \
   --name $AKS_CLUSTER_NAME --overwrite-existing
 
 # Verify connection
@@ -115,7 +115,7 @@ kubectl get service nginx-ingress-ingress-nginx-controller -n ingress-nginx -w
 ```bash
 # Get ACR login server
 ACR_NAME=$(az deployment group show \
-  --resource-group rg-contoso-aks \
+  --resource-group rg-enrollment-aks \
   --name main \
   --query properties.outputs.acrLoginServer.value -o tsv)
 
@@ -131,14 +131,14 @@ sed -i "s/<ACR_NAME>/$ACR_NAME/g" kubernetes/deployments.yaml
 ```bash
 # Get Application Insights connection string
 APP_INSIGHTS_CONN=$(az deployment group show \
-  --resource-group rg-contoso-aks \
+  --resource-group rg-enrollment-aks \
   --name main \
   --query properties.outputs.appInsightsConnectionString.value -o tsv)
 
 # Update the ConfigMap in deployments.yaml with the connection string
 # Or create it directly:
 kubectl create configmap app-config \
-  --namespace contoso-apps \
+  --namespace enrollment-apps \
   --from-literal=APPLICATIONINSIGHTS_CONNECTION_STRING="$APP_INSIGHTS_CONN" \
   --from-literal=ASPNETCORE_ENVIRONMENT="Development" \
   --dry-run=client -o yaml | kubectl apply -f -
@@ -151,24 +151,24 @@ For each application, you need to build and push Docker images to ACR:
 ```bash
 # Login to ACR
 az acr login --name $(az deployment group show \
-  --resource-group rg-contoso-aks \
+  --resource-group rg-enrollment-aks \
   --name main \
   --query properties.outputs.acrName.value -o tsv)
 
-# Build and push each application (example for contoso-angular)
+# Build and push each application (example for enrollment-angular)
 # Navigate to your application directory
-cd /path/to/contoso-angular
+cd /path/to/enrollment-angular
 
-docker build -t $ACR_NAME/contoso-angular:latest .
-docker push $ACR_NAME/contoso-angular:latest
+docker build -t $ACR_NAME/enrollment-angular:latest .
+docker push $ACR_NAME/enrollment-angular:latest
 
 # Repeat for all 6 applications:
-# - contoso-angular
-# - contoso-spa-api
-# - contoso-api
-# - contoso-kendo-grid-api
-# - contoso-bsl
-# - contoso-kendo-grid-bsl
+# - enrollment-angular
+# - enrollment-spa-api
+# - enrollment-api
+# - enrollment-kendo-grid-api
+# - enrollment-bsl
+# - enrollment-kendo-grid-bsl
 ```
 
 ### Step 7: Deploy Applications to AKS
@@ -178,12 +178,12 @@ docker push $ACR_NAME/contoso-angular:latest
 kubectl apply -f kubernetes/deployments.yaml
 
 # Check deployment status
-kubectl get deployments -n contoso-apps
-kubectl get pods -n contoso-apps
-kubectl get services -n contoso-apps
+kubectl get deployments -n enrollment-apps
+kubectl get pods -n enrollment-apps
+kubectl get services -n enrollment-apps
 
 # Check ingress
-kubectl get ingress -n contoso-apps
+kubectl get ingress -n enrollment-apps
 ```
 
 ### Step 8: Configure DNS (Optional)
@@ -194,7 +194,7 @@ INGRESS_IP=$(kubectl get service nginx-ingress-ingress-nginx-controller \
   -n ingress-nginx \
   -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 
-echo "Configure your DNS to point contoso.example.com to $INGRESS_IP"
+echo "Configure your DNS to point enrollment.example.com to $INGRESS_IP"
 ```
 
 ## CI/CD Pipeline Setup
@@ -212,9 +212,9 @@ on:
   workflow_dispatch:
 
 env:
-  RESOURCE_GROUP: rg-contoso-aks
-  AKS_CLUSTER: contoso-aks-dev
-  NAMESPACE: contoso-apps
+  RESOURCE_GROUP: rg-enrollment-aks
+  AKS_CLUSTER: enrollment-aks-dev
+  NAMESPACE: enrollment-apps
 
 jobs:
   build-and-deploy:
@@ -223,12 +223,12 @@ jobs:
     strategy:
       matrix:
         app:
-          - contoso-angular
-          - contoso-spa-api
-          - contoso-api
-          - contoso-kendo-grid-api
-          - contoso-bsl
-          - contoso-kendo-grid-bsl
+          - enrollment-angular
+          - enrollment-spa-api
+          - enrollment-api
+          - enrollment-kendo-grid-api
+          - enrollment-bsl
+          - enrollment-kendo-grid-bsl
     
     steps:
     - uses: actions/checkout@v3
@@ -287,9 +287,9 @@ pool:
   vmImage: 'ubuntu-latest'
 
 variables:
-  resourceGroup: 'rg-contoso-aks'
-  aksCluster: 'contoso-aks-dev'
-  namespace: 'contoso-apps'
+  resourceGroup: 'rg-enrollment-aks'
+  aksCluster: 'enrollment-aks-dev'
+  namespace: 'enrollment-apps'
 
 stages:
 - stage: Build
@@ -371,7 +371,7 @@ Only run these commands when you need to change infrastructure configuration:
 # Update parameters in main.bicepparam (e.g., increase node count)
 # Then redeploy:
 az deployment group create \
-  --resource-group rg-contoso-aks \
+  --resource-group rg-enrollment-aks \
   --template-file main.bicep \
   --parameters main.bicepparam
 ```
@@ -382,31 +382,31 @@ az deployment group create \
 ```bash
 # Get Application Insights name
 az deployment group show \
-  --resource-group rg-contoso-aks \
+  --resource-group rg-enrollment-aks \
   --name main \
   --query properties.outputs.appInsightsName.value
 
 # Open in portal
 az monitor app-insights component show \
   --app <app-insights-name> \
-  --resource-group rg-contoso-aks \
+  --resource-group rg-enrollment-aks \
   --query appId
 ```
 
 ### View Container Logs
 ```bash
 # View logs for a specific pod
-kubectl logs -f <pod-name> -n contoso-apps
+kubectl logs -f <pod-name> -n enrollment-apps
 
 # View logs for a deployment
-kubectl logs -f deployment/angular-frontend -n contoso-apps
+kubectl logs -f deployment/angular-frontend -n enrollment-apps
 ```
 
 ### Query Log Analytics
 ```bash
 # Get Log Analytics workspace ID
 az deployment group show \
-  --resource-group rg-contoso-aks \
+  --resource-group rg-enrollment-aks \
   --name main \
   --query properties.outputs.logAnalyticsWorkspaceId.value
 ```
@@ -415,7 +415,7 @@ az deployment group show \
 
 ```bash
 # Delete the entire resource group (WARNING: This deletes everything)
-az group delete --name rg-contoso-aks --yes --no-wait
+az group delete --name rg-enrollment-aks --yes --no-wait
 ```
 
 ## Best Practices Summary

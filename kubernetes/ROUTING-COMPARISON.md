@@ -6,9 +6,9 @@
 All services accessible through a single hostname with different URL paths:
 ```
 http://20.15.57.117/                          → Angular
-http://20.15.57.117/contoso-api/weatherforecast     → CRUD API
-http://20.15.57.117/contoso-spa-api/weatherforecast → Workflow API
-http://20.15.57.117/contoso-kendo-grid-api/weatherforecast → Grid API
+http://20.15.57.117/enrollment-api/weatherforecast     → CRUD API
+http://20.15.57.117/enrollment-spa-api/weatherforecast → Workflow API
+http://20.15.57.117/enrollment-kendo-grid-api/weatherforecast → Grid API
 ```
 
 ### Advantages ✅
@@ -18,7 +18,7 @@ http://20.15.57.117/contoso-kendo-grid-api/weatherforecast → Grid API
 - **Good for demos** - easy to share a single URL
 
 ### Disadvantages ❌
-- **Requires URL rewriting** - ingress must strip path prefixes (`/contoso-api` → `/`)
+- **Requires URL rewriting** - ingress must strip path prefixes (`/enrollment-api` → `/`)
 - **API design constraints** - all endpoints must be prefixed
 - **Complex CORS** - all services share the same origin
 - **Harder to migrate** - services are tied to URL structure
@@ -31,18 +31,18 @@ http://20.15.57.117/contoso-kendo-grid-api/weatherforecast → Grid API
 ### Architecture
 Each service gets its own subdomain, all pointing to the same IP:
 ```
-http://contoso.20.15.57.117.nip.io/                    → Angular
-http://contoso-api.20.15.57.117.nip.io/weatherforecast → CRUD API
-http://contoso-spa-api.20.15.57.117.nip.io/weatherforecast → Workflow API
-http://contoso-kendo-grid-api.20.15.57.117.nip.io/weatherforecast → Grid API
+http://enrollment.20.15.57.117.nip.io/                    → Angular
+http://enrollment-api.20.15.57.117.nip.io/weatherforecast → CRUD API
+http://enrollment-spa-api.20.15.57.117.nip.io/weatherforecast → Workflow API
+http://enrollment-kendo-grid-api.20.15.57.117.nip.io/weatherforecast → Grid API
 ```
 
 Or with your own domain:
 ```
-http://contoso.yourdomain.com/                    → Angular
-http://contoso-api.yourdomain.com/weatherforecast → CRUD API
-http://contoso-spa-api.yourdomain.com/weatherforecast → Workflow API
-http://contoso-kendo-grid-api.yourdomain.com/weatherforecast → Grid API
+http://enrollment.yourdomain.com/                    → Angular
+http://enrollment-api.yourdomain.com/weatherforecast → CRUD API
+http://enrollment-spa-api.yourdomain.com/weatherforecast → Workflow API
+http://enrollment-kendo-grid-api.yourdomain.com/weatherforecast → Grid API
 ```
 
 ### Advantages ✅
@@ -131,10 +131,10 @@ You can test host-based routing right now without breaking your current setup:
 kubectl apply -f kubernetes/deployments-host-based-nip.yaml
 
 # Test the new endpoints
-curl http://contoso-api.20.15.57.117.nip.io/weatherforecast
+curl http://enrollment-api.20.15.57.117.nip.io/weatherforecast
 
 # Your current path-based URLs still work!
-curl http://20.15.57.117/contoso-api/weatherforecast
+curl http://20.15.57.117/enrollment-api/weatherforecast
 
 # If you like it, update Angular URLs and delete old ingresses
 # If not, just delete the new ingresses: kubectl delete -f kubernetes/deployments-host-based-nip.yaml
@@ -162,12 +162,12 @@ curl http://20.15.57.117/contoso-api/weatherforecast
 
 In Azure Container Apps, each app automatically gets an FQDN:
 ```
-https://contoso-api.proudhill-12345.eastus2.azurecontainerapps.io
+https://enrollment-api.proudhill-12345.eastus2.azurecontainerapps.io
 ```
 
 With host-based routing on AKS:
 ```
-https://contoso-api.yourdomain.com
+https://enrollment-api.yourdomain.com
 ```
 
 This makes migration between AKS and Container Apps easier, as the URL pattern is similar.

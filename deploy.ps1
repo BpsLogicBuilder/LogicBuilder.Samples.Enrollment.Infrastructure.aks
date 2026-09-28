@@ -1,14 +1,14 @@
-# Quick deployment script for Contoso AKS Infrastructure (PowerShell)
+# Quick deployment script for Enrollment AKS Infrastructure (PowerShell)
 
 param(
-    [string]$ResourceGroup = "rg-contoso-aks",
+    [string]$ResourceGroup = "rg-enrollment-aks",
     [string]$Location = "eastus2"
 )
 
 $ErrorActionPreference = "Stop"
 
 Write-Host "======================================" -ForegroundColor Green
-Write-Host "Contoso AKS Infrastructure Deployment" -ForegroundColor Green
+Write-Host "Enrollment AKS Infrastructure Deployment" -ForegroundColor Green
 Write-Host "======================================" -ForegroundColor Green
 
 # Variables
@@ -140,9 +140,9 @@ if (Test-Path "kubernetes\deployments.yaml") {
     try {
         kubectl version --client | Out-Null
         Write-Host "Creating/updating ConfigMap with Application Insights..." -ForegroundColor Yellow
-        kubectl create namespace contoso-apps --dry-run=client -o yaml | kubectl apply -f -
+        kubectl create namespace enrollment-apps --dry-run=client -o yaml | kubectl apply -f -
         kubectl create configmap app-config `
-          --namespace contoso-apps `
+          --namespace enrollment-apps `
           --from-literal=APPLICATIONINSIGHTS_CONNECTION_STRING="$AppInsightsConn" `
           --from-literal=ASPNETCORE_ENVIRONMENT="Development" `
           --dry-run=client -o yaml | kubectl apply -f -
@@ -168,6 +168,6 @@ Write-Host "3. Deploy applications to AKS:"
 Write-Host "   kubectl apply -f kubernetes\deployments.yaml" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "4. Check deployment status:"
-Write-Host "   kubectl get pods -n contoso-apps" -ForegroundColor Yellow
+Write-Host "   kubectl get pods -n enrollment-apps" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "See DEPLOYMENT-GUIDE.md for detailed instructions" -ForegroundColor Green

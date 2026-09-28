@@ -24,13 +24,13 @@ jobs:
       uses: azure/arm-deploy@v1
       with:
         subscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        resourceGroupName: ${{ secrets.AZURE_RG_CONTOSO_AKS }}
+        resourceGroupName: ${{ secrets.AZURE_RG_ENROLLMENT_AKS }}
         template: ./main.bicep
         failOnStdErr: false
 
     - name: Get AKS Credentials
       env:
-        RESOURCE_GROUP: ${{ secrets.AZURE_RG_CONTOSO_AKS }}
+        RESOURCE_GROUP: ${{ secrets.AZURE_RG_ENROLLMENT_AKS }}
         AKS_CLUSTER_NAME: ${{ steps.deployClusterStep.outputs.aksClusterName }}
       run: |
         az aks get-credentials --resource-group ${{ env.RESOURCE_GROUP }} --name ${{ env.AKS_CLUSTER_NAME }}

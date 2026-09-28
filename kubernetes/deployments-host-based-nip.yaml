@@ -2,8 +2,8 @@
 # Replace the deployments.yaml ingress section with this configuration to test host-based routing
 
 # This uses nip.io which automatically resolves:
-# - contoso-api.20.15.57.117.nip.io → 20.15.57.117
-# - contoso-spa-api.20.15.57.117.nip.io → 20.15.57.117
+# - enrollment-api.20.15.57.117.nip.io → 20.15.57.117
+# - enrollment-spa-api.20.15.57.117.nip.io → 20.15.57.117
 # - etc.
 
 # To apply: kubectl apply -f kubernetes/deployments-host-based-nip.yaml
@@ -14,22 +14,22 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: contoso-health-ingress
-  namespace: contoso-apps
+  name: enrollment-health-ingress
+  namespace: enrollment-apps
   annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "false"
     nginx.ingress.kubernetes.io/rewrite-target: /weatherforecast
 spec:
   ingressClassName: nginx
   rules:
-  - host: contoso-spa-api.20.15.57.117.nip.io
+  - host: enrollment-spa-api.20.15.57.117.nip.io
     http:
       paths:
       - path: /healthz
         pathType: Exact
         backend:
           service:
-            name: contoso-spa-api
+            name: enrollment-spa-api
             port:
               number: 8080
 
@@ -38,8 +38,8 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: contoso-spa-api-ingress
-  namespace: contoso-apps
+  name: enrollment-spa-api-ingress
+  namespace: enrollment-apps
   annotations:
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
@@ -49,14 +49,14 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-  - host: contoso-spa-api.20.15.57.117.nip.io
+  - host: enrollment-spa-api.20.15.57.117.nip.io
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: contoso-spa-api
+            name: enrollment-spa-api
             port:
               number: 8080
 
@@ -65,8 +65,8 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: contoso-api-ingress
-  namespace: contoso-apps
+  name: enrollment-api-ingress
+  namespace: enrollment-apps
   annotations:
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
@@ -76,14 +76,14 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-  - host: contoso-api.20.15.57.117.nip.io
+  - host: enrollment-api.20.15.57.117.nip.io
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: contoso-api
+            name: enrollment-api
             port:
               number: 8080
 
@@ -92,8 +92,8 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: contoso-kendo-grid-api-ingress
-  namespace: contoso-apps
+  name: enrollment-kendo-grid-api-ingress
+  namespace: enrollment-apps
   annotations:
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
@@ -103,14 +103,14 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-  - host: contoso-kendo-grid-api.20.15.57.117.nip.io
+  - host: enrollment-kendo-grid-api.20.15.57.117.nip.io
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: contoso-kendo-grid-api
+            name: enrollment-kendo-grid-api
             port:
               number: 8080
 
@@ -119,8 +119,8 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: contoso-frontend-ingress
-  namespace: contoso-apps
+  name: enrollment-frontend-ingress
+  namespace: enrollment-apps
   annotations:
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
@@ -130,27 +130,27 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-  - host: contoso.20.15.57.117.nip.io
+  - host: enrollment.20.15.57.117.nip.io
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: contoso-angular
+            name: enrollment-angular
             port:
               number: 80
 
 ---
 # After applying the above ingresses, update the Angular deployment environment variables:
 #
-# kubectl set env deployment/contoso-angular -n contoso-apps \
-#   WORKFLOW_URL=http://contoso-spa-api.20.15.57.117.nip.io \
-#   CRUD_URL=http://contoso-api.20.15.57.117.nip.io \
-#   GRID_URL=http://contoso-kendo-grid-api.20.15.57.117.nip.io
+# kubectl set env deployment/enrollment-angular -n enrollment-apps \
+#   WORKFLOW_URL=http://enrollment-spa-api.20.15.57.117.nip.io \
+#   CRUD_URL=http://enrollment-api.20.15.57.117.nip.io \
+#   GRID_URL=http://enrollment-kendo-grid-api.20.15.57.117.nip.io
 #
 # Test URLs:
-# http://contoso.20.15.57.117.nip.io
-# http://contoso-api.20.15.57.117.nip.io/weatherforecast
-# http://contoso-spa-api.20.15.57.117.nip.io/weatherforecast
-# http://contoso-kendo-grid-api.20.15.57.117.nip.io/weatherforecast
+# http://enrollment.20.15.57.117.nip.io
+# http://enrollment-api.20.15.57.117.nip.io/weatherforecast
+# http://enrollment-spa-api.20.15.57.117.nip.io/weatherforecast
+# http://enrollment-kendo-grid-api.20.15.57.117.nip.io/weatherforecast

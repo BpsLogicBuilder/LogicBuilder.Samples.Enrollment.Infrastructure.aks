@@ -1,6 +1,6 @@
-# Contoso AKS Infrastructure Deployment steps
+# Enrollment AKS Infrastructure Deployment steps
 
-This document outlines the steps to deploy the Contoso AKS infrastructure from your workstation.
+This document outlines the steps to deploy the Enrollment AKS infrastructure from your workstation.
 
 ## Prerequisites
 - Azure CLI installed
@@ -22,12 +22,12 @@ The managed identity only needs the Key Vault Certificate Officer role for deplo
 
 
 ### Set $rg to an existing resource group.
-rg="rg-contoso-aks"
+rg="rg-enrollment-aks"
 
 ### Create SSH key if it does not exist.
-az sshkey create --name "contosoAksSSHKey" --resource-group $rg
+az sshkey create --name "enrollmentAksSSHKey" --resource-group $rg
 
-Main.bicep declares a Microsoft.Compute/sshPublicKeys resource whose name is "contosoAksSSHKey" and uses the public key from the SSH key created above.
+Main.bicep declares a Microsoft.Compute/sshPublicKeys resource whose name is "enrollmentAksSSHKey" and uses the public key from the SSH key created above.
 
 ### Deploy the AKS Cluster  
 ```bash
@@ -51,33 +51,33 @@ kubectl get service nginx-ingress-ingress-nginx-controller -n ingress-nginx -w
 ### Deploy namespace so we can add secrets before deploying workloads
 ```bash
 KEY_VAULT_NAME=$(az deployment group show --resource-group $rg --name main --query properties.outputs.keyVaultName.value -o tsv)
-CONTOSO_APP_NAMESPACE=$(az deployment group show --resource-group $rg --name main --query properties.outputs.kubernetesNamespace.value -o tsv)
+ENROLLMENT_APP_NAMESPACE=$(az deployment group show --resource-group $rg --name main --query properties.outputs.kubernetesNamespace.value -o tsv)
 
-sed -e "s|CONTOSO_APP_NAMESPACE|${CONTOSO_APP_NAMESPACE}|g" \
-        kubernetes/namespace.yaml | tee /dev/tty | kubectl apply -f - -n $CONTOSO_APP_NAMESPACE
-kubectl create secret generic app-secrets --namespace=$CONTOSO_APP_NAMESPACE --from-literal=keyVaultUrl="https://${KEY_VAULT_NAME}.vault.azure.net/" --from-literal=db-connection-string="<Your database connection string>"
+sed -e "s|ENROLLMENT_APP_NAMESPACE|${ENROLLMENT_APP_NAMESPACE}|g" \
+        kubernetes/namespace.yaml | tee /dev/tty | kubectl apply -f - -n $ENROLLMENT_APP_NAMESPACE
+kubectl create secret generic app-secrets --namespace=$ENROLLMENT_APP_NAMESPACE --from-literal=keyVaultUrl="https://${KEY_VAULT_NAME}.vault.azure.net/" --from-literal=db-connection-string="<Your database connection string>"
 ```
 
 ### Upload images to the ACR
 From the following repositories, go the infrastructure folder and run the commands to build and push the images to the ACR.  The ACR name is output from the main.bicep deployment.
 
-- LogicBuilder.Samples.Contoso.Angular (1 image)
+- LogicBuilder.Samples.Enrollment.Angular (1 image)
     ```bash
     docker buildx build --secret id=kendo_license,src=$env:APPDATA\Telerik\telerik-license.txt -t "${acrName}.azurecr.io/${imageName}:${imageTag}" -t "${acrName}.azurecr.io/${imageName}:latest" --push .
     ```
-- LogicBuilder.Samples.Contoso.KendoGrid.Services (2 images)
+- LogicBuilder.Samples.Enrollment.KendoGrid.Services (2 images)
     ```bash
-    az acr build --registry $acrName --image "contosokendogridapi:${imageTag}" --image contosokendogridapi:latest --file ./Contoso.KendoGrid.Api/Dockerfile .
-    az acr build --registry $acrName --image "contosokendogridbsl:${imageTag}" --image contosokendogridbsl:latest --file ./Contoso.KendoGrid.Bsl/Dockerfile . --secret-build-arg TELERIK_USERNAME="api-key" --secret-build-arg TELERIK_PASSWORD="<Your Telerik API Key>"
+    az acr build --registry $acrName --image "enrollmentkendogridapi:${imageTag}" --image enrollmentkendogridapi:latest --file ./Enrollment.KendoGrid.Api/Dockerfile .
+    az acr build --registry $acrName --image "enrollmentkendogridbsl:${imageTag}" --image enrollmentkendogridbsl:latest --file ./Enrollment.KendoGrid.Bsl/Dockerfile . --secret-build-arg TELERIK_USERNAME="api-key" --secret-build-arg TELERIK_PASSWORD="<Your Telerik API Key>"
     ```
-- LogicBuilder.Samples.Contoso.Services (2 images)
+- LogicBuilder.Samples.Enrollment.Services (2 images)
     ```bash
-    az acr build --registry $acrName --image "contosoapi:${imageTag}" --image contosoapi:latest --file ./Contoso.Api/Dockerfile .
-    az acr build --registry $acrName --image "contosobsl:${imageTag}" --image contosobsl:latest --file ./Contoso.Bsl/Dockerfile .
+    az acr build --registry $acrName --image "enrollmentapi:${imageTag}" --image enrollmentapi:latest --file ./Enrollment.Api/Dockerfile .
+    az acr build --registry $acrName --image "enrollmentbsl:${imageTag}" --image enrollmentbsl:latest --file ./Enrollment.Bsl/Dockerfile .
     ```
-- LogicBuilder.Samples.Contoso.Spa.Flow (1 image)
+- LogicBuilder.Samples.Enrollment.Spa.Flow (1 image)
     ```bash
-    az acr build --registry $acrName --image "contosospaapi:${imageTag}" --image contosospaapi:latest --file ./Contoso.Spa.Api/Dockerfile .
+    az acr build --registry $acrName --image "enrollmentspaapi:${imageTag}" --image enrollmentspaapi:latest --file ./Enrollment.Spa.Api/Dockerfile .
     ```
 
 ### Deploy the manifests
@@ -92,33 +92,33 @@ APP_INSIGHTS_CONNECTION_STRING=$(az deployment group show --resource-group $rg -
 
 APP_CONFIG_ENDPOINT=$(az deployment group show --resource-group $rg --name main --query properties.outputs.appConfigurationEndPoint.value -o tsv)
 
-CONTOSO_API_IDENTITY_CLIENTID=$(az deployment group show --resource-group $rg --name main --query properties.outputs.contosoApiManagedIdentityClientId.value -o tsv)
+ENROLLMENT_API_IDENTITY_CLIENTID=$(az deployment group show --resource-group $rg --name main --query properties.outputs.enrollmentApiManagedIdentityClientId.value -o tsv)
 
-CONTOSO_BSL_IDENTITY_CLIENTID=$(az deployment group show --resource-group $rg --name main --query properties.outputs.contosoBslManagedIdentityClientId.value -o tsv)
+ENROLLMENT_BSL_IDENTITY_CLIENTID=$(az deployment group show --resource-group $rg --name main --query properties.outputs.enrollmentBslManagedIdentityClientId.value -o tsv)
 
-CONTOSO_KENDO_GRID_API_IDENTITY_CLIENTID=$(az deployment group show --resource-group $rg --name main --query properties.outputs.contosoKendoGridApiManagedIdentityClientId.value -o tsv)
+ENROLLMENT_KENDO_GRID_API_IDENTITY_CLIENTID=$(az deployment group show --resource-group $rg --name main --query properties.outputs.enrollmentKendoGridApiManagedIdentityClientId.value -o tsv)
 
-CONTOSO_KENDO_GRID_BSL_IDENTITY_CLIENTID=$(az deployment group show --resource-group $rg --name main --query properties.outputs.contosoKendoGridBslManagedIdentityClientId.value -o tsv)
+ENROLLMENT_KENDO_GRID_BSL_IDENTITY_CLIENTID=$(az deployment group show --resource-group $rg --name main --query properties.outputs.enrollmentKendoGridBslManagedIdentityClientId.value -o tsv)
 
-CONTOSO_SPA_API_IDENTITY_CLIENTID=$(az deployment group show --resource-group $rg --name main --query properties.outputs.contosoSpaApiManagedIdentityClientId.value -o tsv)
+ENROLLMENT_SPA_API_IDENTITY_CLIENTID=$(az deployment group show --resource-group $rg --name main --query properties.outputs.enrollmentSpaApiManagedIdentityClientId.value -o tsv)
 
-CONTOSO_ANGULAR_IDENTITY_CLIENTID=$(az deployment group show --resource-group $rg --name main --query properties.outputs.contosoAngularManagedIdentityClientId.value -o tsv)
+ENROLLMENT_ANGULAR_IDENTITY_CLIENTID=$(az deployment group show --resource-group $rg --name main --query properties.outputs.enrollmentAngularManagedIdentityClientId.value -o tsv)
 
-CONTOSO_API_SERVICEACCOUNT_NAME=$(az deployment group show --resource-group $rg --name main --query properties.outputs.contosoApiServiceAccountName.value -o tsv)
+ENROLLMENT_API_SERVICEACCOUNT_NAME=$(az deployment group show --resource-group $rg --name main --query properties.outputs.enrollmentApiServiceAccountName.value -o tsv)
 
-CONTOSO_BSL_SERVICEACCOUNT_NAME=$(az deployment group show --resource-group $rg --name main --query properties.outputs.contosoBslServiceAccountName.value -o tsv)
+ENROLLMENT_BSL_SERVICEACCOUNT_NAME=$(az deployment group show --resource-group $rg --name main --query properties.outputs.enrollmentBslServiceAccountName.value -o tsv)
 
-CONTOSO_KENDO_GRID_API_SERVICEACCOUNT_NAME=$(az deployment group show --resource-group $rg --name main --query properties.outputs.contosoKendoGridApiServiceAccountName.value -o tsv)
+ENROLLMENT_KENDO_GRID_API_SERVICEACCOUNT_NAME=$(az deployment group show --resource-group $rg --name main --query properties.outputs.enrollmentKendoGridApiServiceAccountName.value -o tsv)
 
-CONTOSO_KENDO_GRID_BSL_SERVICEACCOUNT_NAME=$(az deployment group show --resource-group $rg --name main --query properties.outputs.contosoKendoGridBslServiceAccountName.value -o tsv)
+ENROLLMENT_KENDO_GRID_BSL_SERVICEACCOUNT_NAME=$(az deployment group show --resource-group $rg --name main --query properties.outputs.enrollmentKendoGridBslServiceAccountName.value -o tsv)
 
-CONTOSO_SPA_API_SERVICEACCOUNT_NAME=$(az deployment group show --resource-group $rg --name main --query properties.outputs.contosoSpaApiServiceAccountName.value -o tsv)
+ENROLLMENT_SPA_API_SERVICEACCOUNT_NAME=$(az deployment group show --resource-group $rg --name main --query properties.outputs.enrollmentSpaApiServiceAccountName.value -o tsv)
 
-CONTOSO_ANGULAR_SERVICEACCOUNT_NAME=$(az deployment group show --resource-group $rg --name main --query properties.outputs.contosoAngularServiceAccountName.value -o tsv)
+ENROLLMENT_ANGULAR_SERVICEACCOUNT_NAME=$(az deployment group show --resource-group $rg --name main --query properties.outputs.enrollmentAngularServiceAccountName.value -o tsv)
 
-CONTOSO_APP_NAMESPACE=$(az deployment group show --resource-group $rg --name main --query properties.outputs.kubernetesNamespace.value -o tsv)
+ENROLLMENT_APP_NAMESPACE=$(az deployment group show --resource-group $rg --name main --query properties.outputs.kubernetesNamespace.value -o tsv)
 
-EXPECTED_CERTIFICATE_THUMBPRINT=$(az deployment group show --resource-group $rg --name main --query properties.outputs.contosoBslCertificateThumbprint.value -o tsv)
+EXPECTED_CERTIFICATE_THUMBPRINT=$(az deployment group show --resource-group $rg --name main --query properties.outputs.enrollmentBslCertificateThumbprint.value -o tsv)
 
 ---
 Finally, run the following command to deploy the manifests.  The command will replace the placeholders in the manifests with the values from the main.bicep deployment outputs.
@@ -128,20 +128,20 @@ sed -e "s|LOAD_BALANCER_IP|${LOAD_BALANCER_IP}|g" \
         -e "s|ACR_NAME|${ACR_NAME}|g" \
         -e "s|APP_INSIGHTS_CONNECTION_STRING|${APP_INSIGHTS_CONNECTION_STRING}|g" \
         -e "s|APP_CONFIG_ENDPOINT|${APP_CONFIG_ENDPOINT}|g" \
-        -e "s|CONTOSO_API_IDENTITY_CLIENTID|${CONTOSO_API_IDENTITY_CLIENTID}|g" \
-        -e "s|CONTOSO_BSL_IDENTITY_CLIENTID|${CONTOSO_BSL_IDENTITY_CLIENTID}|g" \
-        -e "s|CONTOSO_KENDO_GRID_API_IDENTITY_CLIENTID|${CONTOSO_KENDO_GRID_API_IDENTITY_CLIENTID}|g" \
-        -e "s|CONTOSO_KENDO_GRID_BSL_IDENTITY_CLIENTID|${CONTOSO_KENDO_GRID_BSL_IDENTITY_CLIENTID}|g" \
-        -e "s|CONTOSO_SPA_API_IDENTITY_CLIENTID|${CONTOSO_SPA_API_IDENTITY_CLIENTID}|g" \
-        -e "s|CONTOSO_ANGULAR_IDENTITY_CLIENTID|${CONTOSO_ANGULAR_IDENTITY_CLIENTID}|g" \
-        -e "s|CONTOSO_API_SERVICEACCOUNT_NAME|${CONTOSO_API_SERVICEACCOUNT_NAME}|g" \
-        -e "s|CONTOSO_BSL_SERVICEACCOUNT_NAME|${CONTOSO_BSL_SERVICEACCOUNT_NAME}|g" \
-        -e "s|CONTOSO_KENDO_GRID_API_SERVICEACCOUNT_NAME|${CONTOSO_KENDO_GRID_API_SERVICEACCOUNT_NAME}|g" \
-        -e "s|CONTOSO_KENDO_GRID_BSL_SERVICEACCOUNT_NAME|${CONTOSO_KENDO_GRID_BSL_SERVICEACCOUNT_NAME}|g" \
-        -e "s|CONTOSO_SPA_API_SERVICEACCOUNT_NAME|${CONTOSO_SPA_API_SERVICEACCOUNT_NAME}|g" \
-        -e "s|CONTOSO_ANGULAR_SERVICEACCOUNT_NAME|${CONTOSO_ANGULAR_SERVICEACCOUNT_NAME}|g" \
-        -e "s|CONTOSO_APP_NAMESPACE|${CONTOSO_APP_NAMESPACE}|g" \
+        -e "s|ENROLLMENT_API_IDENTITY_CLIENTID|${ENROLLMENT_API_IDENTITY_CLIENTID}|g" \
+        -e "s|ENROLLMENT_BSL_IDENTITY_CLIENTID|${ENROLLMENT_BSL_IDENTITY_CLIENTID}|g" \
+        -e "s|ENROLLMENT_KENDO_GRID_API_IDENTITY_CLIENTID|${ENROLLMENT_KENDO_GRID_API_IDENTITY_CLIENTID}|g" \
+        -e "s|ENROLLMENT_KENDO_GRID_BSL_IDENTITY_CLIENTID|${ENROLLMENT_KENDO_GRID_BSL_IDENTITY_CLIENTID}|g" \
+        -e "s|ENROLLMENT_SPA_API_IDENTITY_CLIENTID|${ENROLLMENT_SPA_API_IDENTITY_CLIENTID}|g" \
+        -e "s|ENROLLMENT_ANGULAR_IDENTITY_CLIENTID|${ENROLLMENT_ANGULAR_IDENTITY_CLIENTID}|g" \
+        -e "s|ENROLLMENT_API_SERVICEACCOUNT_NAME|${ENROLLMENT_API_SERVICEACCOUNT_NAME}|g" \
+        -e "s|ENROLLMENT_BSL_SERVICEACCOUNT_NAME|${ENROLLMENT_BSL_SERVICEACCOUNT_NAME}|g" \
+        -e "s|ENROLLMENT_KENDO_GRID_API_SERVICEACCOUNT_NAME|${ENROLLMENT_KENDO_GRID_API_SERVICEACCOUNT_NAME}|g" \
+        -e "s|ENROLLMENT_KENDO_GRID_BSL_SERVICEACCOUNT_NAME|${ENROLLMENT_KENDO_GRID_BSL_SERVICEACCOUNT_NAME}|g" \
+        -e "s|ENROLLMENT_SPA_API_SERVICEACCOUNT_NAME|${ENROLLMENT_SPA_API_SERVICEACCOUNT_NAME}|g" \
+        -e "s|ENROLLMENT_ANGULAR_SERVICEACCOUNT_NAME|${ENROLLMENT_ANGULAR_SERVICEACCOUNT_NAME}|g" \
+        -e "s|ENROLLMENT_APP_NAMESPACE|${ENROLLMENT_APP_NAMESPACE}|g" \
         -e "s|EXPECTED_CERTIFICATE_THUMBPRINT|${EXPECTED_CERTIFICATE_THUMBPRINT}|g" \
         -e "s|IMAGE_TAG|latest|g" \
-        kubernetes/deployments.yaml | tee /dev/tty | kubectl apply -f - -n ${CONTOSO_APP_NAMESPACE}
+        kubernetes/deployments.yaml | tee /dev/tty | kubectl apply -f - -n ${ENROLLMENT_APP_NAMESPACE}
 ```

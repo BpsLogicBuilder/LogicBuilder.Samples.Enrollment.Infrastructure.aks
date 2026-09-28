@@ -1,4 +1,4 @@
-# Contoso AKS Infrastructure
+# Enrollment AKS Infrastructure
 
 Azure Kubernetes Service (AKS) infrastructure for deploying 6 microservices applications using Bicep and Kubernetes.
 
@@ -50,7 +50,7 @@ This repository contains infrastructure-as-code for deploying a complete AKS env
 ├── kubernetes/
 │   └── deployments.yaml          # Kubernetes manifests for all 6 apps
 └── applications/
-    └── contoso-apps.bicep        # Application-specific configurations
+    └── enrollment-apps.bicep        # Application-specific configurations
 ```
 
 ## Quick Start
@@ -83,21 +83,21 @@ chmod +x deploy.sh
 az login
 
 # 2. Create resource group
-az group create --name contoso-aks-rg --location eastus
+az group create --name enrollment-aks-rg --location eastus
 
 # 3. Update main.bicepparam with your SSH public key
 cat ~/.ssh/id_rsa.pub  # Copy this
 
 # 4. Deploy infrastructure
 az deployment group create \
-  --resource-group contoso-aks-rg \
+  --resource-group enrollment-aks-rg \
   --template-file main.bicep \
   --parameters main.bicepparam
 
 # 5. Get AKS credentials
 az aks get-credentials \
-  --resource-group contoso-aks-rg \
-  --name contoso-aks-dev
+  --resource-group enrollment-aks-rg \
+  --name enrollment-aks-dev
 
 # 6. Install NGINX Ingress
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
@@ -113,7 +113,7 @@ helm install nginx-ingress ingress-nginx/ingress-nginx \
 ```bash
 # Get ACR name
 ACR_NAME=$(az deployment group show \
-  --resource-group contoso-aks-rg \
+  --resource-group enrollment-aks-rg \
   --name main \
   --query properties.outputs.acrLoginServer.value -o tsv)
 
@@ -147,13 +147,13 @@ kubectl apply -f kubernetes/deployments.yaml
 
 ```bash
 # Check pods
-kubectl get pods -n contoso-apps
+kubectl get pods -n enrollment-apps
 
 # Check services
-kubectl get services -n contoso-apps
+kubectl get services -n enrollment-apps
 
 # Check ingress
-kubectl get ingress -n contoso-apps
+kubectl get ingress -n enrollment-apps
 ```
 
 ## CI/CD Integration
@@ -226,7 +226,7 @@ All applications are configured to send telemetry to Application Insights:
 ```bash
 # Get connection string
 az deployment group show \
-  --resource-group contoso-aks-rg \
+  --resource-group enrollment-aks-rg \
   --name main \
   --query properties.outputs.appInsightsConnectionString.value
 ```
@@ -235,10 +235,10 @@ az deployment group show \
 
 ```bash
 # View logs for a specific pod
-kubectl logs -f <pod-name> -n contoso-apps
+kubectl logs -f <pod-name> -n enrollment-apps
 
 # View logs for a deployment
-kubectl logs -f deployment/angular-frontend -n contoso-apps
+kubectl logs -f deployment/angular-frontend -n enrollment-apps
 ```
 
 ### AKS Diagnostics
@@ -256,12 +256,12 @@ AKS control plane logs are sent to Log Analytics:
 
 ```bash
 # Scale a deployment
-kubectl scale deployment angular-frontend --replicas=5 -n contoso-apps
+kubectl scale deployment angular-frontend --replicas=5 -n enrollment-apps
 
 # Scale AKS nodes
 az aks scale \
-  --resource-group contoso-aks-rg \
-  --name contoso-aks-dev \
+  --resource-group enrollment-aks-rg \
+  --name enrollment-aks-dev \
   --node-count 5
 ```
 
@@ -274,7 +274,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: angular-frontend-hpa
-  namespace: contoso-apps
+  namespace: enrollment-apps
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
@@ -327,7 +327,7 @@ spec:
 **Issue: Pods stuck in ImagePullBackOff**
 ```bash
 # Check if AKS can pull from ACR
-kubectl describe pod <pod-name> -n contoso-apps
+kubectl describe pod <pod-name> -n enrollment-apps
 
 # Verify ACR role assignment
 az role assignment list --scope $(az acr show --name <acr-name> --query id -o tsv)
@@ -345,22 +345,22 @@ kubectl get service nginx-ingress-ingress-nginx-controller -n ingress-nginx
 **Issue: Application not logging to App Insights**
 ```bash
 # Verify ConfigMap
-kubectl get configmap app-config -n contoso-apps -o yaml
+kubectl get configmap app-config -n enrollment-apps -o yaml
 
 # Check environment variables in pod
-kubectl exec <pod-name> -n contoso-apps -- env | grep INSIGHTS
+kubectl exec <pod-name> -n enrollment-apps -- env | grep INSIGHTS
 ```
 
 ## Cleanup
 
 **Delete everything:**
 ```bash
-az group delete --name contoso-aks-rg --yes --no-wait
+az group delete --name enrollment-aks-rg --yes --no-wait
 ```
 
 **Delete only Kubernetes resources:**
 ```bash
-kubectl delete namespace contoso-apps
+kubectl delete namespace enrollment-apps
 ```
 
 ## Documentation
@@ -375,7 +375,7 @@ kubectl delete namespace contoso-apps
 For issues or questions:
 1. Check the [DEPLOYMENT-GUIDE.md](DEPLOYMENT-GUIDE.md)
 2. Review AKS logs in Log Analytics
-3. Check pod logs: `kubectl logs -n contoso-apps <pod-name>`
+3. Check pod logs: `kubectl logs -n enrollment-apps <pod-name>`
 
 ## License
 

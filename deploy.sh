@@ -1,5 +1,5 @@
 #!/bin/bash
-# Quick deployment script for Contoso AKS Infrastructure
+# Quick deployment script for Enrollment AKS Infrastructure
 
 set -e
 
@@ -10,11 +10,11 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 echo -e "${GREEN}======================================${NC}"
-echo -e "${GREEN}Contoso AKS Infrastructure Deployment${NC}"
+echo -e "${GREEN}Enrollment AKS Infrastructure Deployment${NC}"
 echo -e "${GREEN}======================================${NC}"
 
 # Variables
-RESOURCE_GROUP="contoso-aks-rg"
+RESOURCE_GROUP="enrollment-aks-rg"
 LOCATION="eastus"
 DEPLOYMENT_NAME="main-$(date +%Y%m%d-%H%M%S)"
 
@@ -136,9 +136,9 @@ if [ -f kubernetes/deployments.yaml ]; then
     # Update ConfigMap with App Insights connection string
     if command -v kubectl &> /dev/null; then
         echo -e "${YELLOW}Creating/updating ConfigMap with Application Insights...${NC}"
-        kubectl create namespace contoso-apps --dry-run=client -o yaml | kubectl apply -f -
+        kubectl create namespace enrollment-apps --dry-run=client -o yaml | kubectl apply -f -
         kubectl create configmap app-config \
-          --namespace contoso-apps \
+          --namespace enrollment-apps \
           --from-literal=APPLICATIONINSIGHTS_CONNECTION_STRING="${APP_INSIGHTS_CONN}" \
           --from-literal=ASPNETCORE_ENVIRONMENT="Development" \
           --dry-run=client -o yaml | kubectl apply -f -
@@ -162,6 +162,6 @@ echo "3. Deploy applications to AKS:"
 echo -e "   ${YELLOW}kubectl apply -f kubernetes/deployments.yaml${NC}"
 echo ""
 echo "4. Check deployment status:"
-echo -e "   ${YELLOW}kubectl get pods -n contoso-apps${NC}"
+echo -e "   ${YELLOW}kubectl get pods -n enrollment-apps${NC}"
 echo ""
 echo -e "${GREEN}See DEPLOYMENT-GUIDE.md for detailed instructions${NC}"

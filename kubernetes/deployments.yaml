@@ -6,9 +6,9 @@
 #   LOAD_BALANCER_IP
 #   ACR_NAME
 #   APP_INSIGHTS_CONNECTION_STRING
-#   CONTOSO_API_IDENTITY_CLIENTID
-#   CONTOSO_API_SERVICEACCOUNT_NAME
-#   CONTOSO_APP_NAMESPACE
+#   ENROLLMENT_API_IDENTITY_CLIENTID
+#   ENROLLMENT_API_SERVICEACCOUNT_NAME
+#   ENROLLMENT_APP_NAMESPACE
 #   EXPECTED_CERTIFICATE_THUMBPRINT
 
 ---
@@ -17,7 +17,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: app-config
-  namespace: CONTOSO_APP_NAMESPACE
+  namespace: ENROLLMENT_APP_NAMESPACE
 data:
   APPLICATIONINSIGHTS_CONNECTION_STRING: "APP_INSIGHTS_CONNECTION_STRING" # Will be set during deployment
   ASPNETCORE_ENVIRONMENT: "Development"
@@ -26,35 +26,35 @@ data:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: CONTOSO_ANGULAR_SERVICEACCOUNT_NAME
-  namespace: CONTOSO_APP_NAMESPACE
+  name: ENROLLMENT_ANGULAR_SERVICEACCOUNT_NAME
+  namespace: ENROLLMENT_APP_NAMESPACE
   annotations:
-    azure.workload.identity/client-id: "CONTOSO_ANGULAR_IDENTITY_CLIENTID"
+    azure.workload.identity/client-id: "ENROLLMENT_ANGULAR_IDENTITY_CLIENTID"
 
 ---
 # 1. angular
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: contoso-angular
-  namespace: CONTOSO_APP_NAMESPACE
+  name: enrollment-angular
+  namespace: ENROLLMENT_APP_NAMESPACE
   labels:
-    app: contoso-angular
+    app: enrollment-angular
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: contoso-angular
+      app: enrollment-angular
   template:
     metadata:
       labels:
-        app: contoso-angular
+        app: enrollment-angular
     spec:
       automountServiceAccountToken: false
-      serviceAccountName: CONTOSO_ANGULAR_SERVICEACCOUNT_NAME
+      serviceAccountName: ENROLLMENT_ANGULAR_SERVICEACCOUNT_NAME
       containers:
-      - name: contoso-angular
-        image: ACR_NAME.azurecr.io/contosoangular:IMAGE_TAG
+      - name: enrollment-angular
+        image: ACR_NAME.azurecr.io/enrollmentangular:IMAGE_TAG
         ports:
         - name: angular-http
           containerPort: 8080
@@ -62,11 +62,11 @@ spec:
         - name: APPLICATION_CONFIGURATION_ENDPOINT
           value: "APP_CONFIG_ENDPOINT"
         - name: WORKFLOW_URL
-          value: "http://contoso-spa-api.LOAD_BALANCER_IP.nip.io" # NOSONAR - DEV Only
+          value: "http://enrollment-spa-api.LOAD_BALANCER_IP.nip.io" # NOSONAR - DEV Only
         - name: CRUD_URL
-          value: "http://contoso-api.LOAD_BALANCER_IP.nip.io" # NOSONAR - DEV Only
+          value: "http://enrollment-api.LOAD_BALANCER_IP.nip.io" # NOSONAR - DEV Only
         - name: GRID_URL
-          value: "http://contoso-kendo-grid-api.LOAD_BALANCER_IP.nip.io" # NOSONAR - DEV Only
+          value: "http://enrollment-kendo-grid-api.LOAD_BALANCER_IP.nip.io" # NOSONAR - DEV Only
         resources:
           requests:
             memory: "256Mi"
@@ -92,12 +92,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: contoso-angular
-  namespace: CONTOSO_APP_NAMESPACE
+  name: enrollment-angular
+  namespace: ENROLLMENT_APP_NAMESPACE
 spec:
   type: ClusterIP
   selector:
-    app: contoso-angular
+    app: enrollment-angular
   ports:
   - port: 80
     targetPort: 8080
@@ -108,35 +108,35 @@ spec:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: CONTOSO_SPA_API_SERVICEACCOUNT_NAME
-  namespace: CONTOSO_APP_NAMESPACE
+  name: ENROLLMENT_SPA_API_SERVICEACCOUNT_NAME
+  namespace: ENROLLMENT_APP_NAMESPACE
   annotations:
-    azure.workload.identity/client-id: "CONTOSO_SPA_API_IDENTITY_CLIENTID"
+    azure.workload.identity/client-id: "ENROLLMENT_SPA_API_IDENTITY_CLIENTID"
 
 ---
 # 2. spa-api
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: contoso-spa-api
-  namespace: CONTOSO_APP_NAMESPACE
+  name: enrollment-spa-api
+  namespace: ENROLLMENT_APP_NAMESPACE
   labels:
-    app: contoso-spa-api
+    app: enrollment-spa-api
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: contoso-spa-api
+      app: enrollment-spa-api
   template:
     metadata:
       labels:
-        app: contoso-spa-api
+        app: enrollment-spa-api
     spec:
       automountServiceAccountToken: false
-      serviceAccountName: CONTOSO_SPA_API_SERVICEACCOUNT_NAME
+      serviceAccountName: ENROLLMENT_SPA_API_SERVICEACCOUNT_NAME
       containers:
-      - name: contoso-spa-api
-        image: ACR_NAME.azurecr.io/contosospaapi:IMAGE_TAG
+      - name: enrollment-spa-api
+        image: ACR_NAME.azurecr.io/enrollmentspaapi:IMAGE_TAG
         ports:
         - containerPort: 8080
         env:
@@ -172,12 +172,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: contoso-spa-api
-  namespace: CONTOSO_APP_NAMESPACE
+  name: enrollment-spa-api
+  namespace: ENROLLMENT_APP_NAMESPACE
 spec:
   type: ClusterIP
   selector:
-    app: contoso-spa-api
+    app: enrollment-spa-api
   ports:
   - port: 8080
     targetPort: 8080
@@ -187,43 +187,43 @@ spec:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: CONTOSO_API_SERVICEACCOUNT_NAME
-  namespace: CONTOSO_APP_NAMESPACE
+  name: ENROLLMENT_API_SERVICEACCOUNT_NAME
+  namespace: ENROLLMENT_APP_NAMESPACE
   annotations:
-    azure.workload.identity/client-id: "CONTOSO_API_IDENTITY_CLIENTID"
+    azure.workload.identity/client-id: "ENROLLMENT_API_IDENTITY_CLIENTID"
 
 ---
 # 3. api
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: contoso-api
-  namespace: CONTOSO_APP_NAMESPACE
+  name: enrollment-api
+  namespace: ENROLLMENT_APP_NAMESPACE
   labels:
-    app: contoso-api
+    app: enrollment-api
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: contoso-api
+      app: enrollment-api
   template:
     metadata:
       labels:
-        app: contoso-api
+        app: enrollment-api
         azure.workload.identity/use: "true"
     spec:
       automountServiceAccountToken: false
-      serviceAccountName: CONTOSO_API_SERVICEACCOUNT_NAME
+      serviceAccountName: ENROLLMENT_API_SERVICEACCOUNT_NAME
       containers:
-      - name: contoso-api
-        image: ACR_NAME.azurecr.io/contosoapi:IMAGE_TAG
+      - name: enrollment-api
+        image: ACR_NAME.azurecr.io/enrollmentapi:IMAGE_TAG
         ports:
         - containerPort: 8080
         env:
         - name: APPLICATION_CONFIGURATION_ENDPOINT
           value: "APP_CONFIG_ENDPOINT"
         - name: baseBslUrl
-          value: "http://contoso-bsl:8080/"
+          value: "http://enrollment-bsl:8080/"
         - name: keyVaultUrl
           valueFrom:
             secretKeyRef:
@@ -261,12 +261,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: contoso-api
-  namespace: CONTOSO_APP_NAMESPACE
+  name: enrollment-api
+  namespace: ENROLLMENT_APP_NAMESPACE
 spec:
   type: ClusterIP
   selector:
-    app: contoso-api
+    app: enrollment-api
   ports:
   - port: 8080
     targetPort: 8080
@@ -276,43 +276,43 @@ spec:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: CONTOSO_KENDO_GRID_API_SERVICEACCOUNT_NAME
-  namespace: CONTOSO_APP_NAMESPACE
+  name: ENROLLMENT_KENDO_GRID_API_SERVICEACCOUNT_NAME
+  namespace: ENROLLMENT_APP_NAMESPACE
   annotations:
-    azure.workload.identity/client-id: "CONTOSO_KENDO_GRID_API_IDENTITY_CLIENTID"
+    azure.workload.identity/client-id: "ENROLLMENT_KENDO_GRID_API_IDENTITY_CLIENTID"
 
 ---
 # 4. kendo-grid-api
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: contoso-kendo-grid-api
-  namespace: CONTOSO_APP_NAMESPACE
+  name: enrollment-kendo-grid-api
+  namespace: ENROLLMENT_APP_NAMESPACE
   labels:
-    app: contoso-kendo-grid-api
+    app: enrollment-kendo-grid-api
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: contoso-kendo-grid-api
+      app: enrollment-kendo-grid-api
   template:
     metadata:
       labels:
-        app: contoso-kendo-grid-api
+        app: enrollment-kendo-grid-api
         azure.workload.identity/use: "true"
     spec:
       automountServiceAccountToken: false
-      serviceAccountName: CONTOSO_KENDO_GRID_API_SERVICEACCOUNT_NAME
+      serviceAccountName: ENROLLMENT_KENDO_GRID_API_SERVICEACCOUNT_NAME
       containers:
-      - name: contoso-kendo-grid-api
-        image: ACR_NAME.azurecr.io/contosokendogridapi:IMAGE_TAG
+      - name: enrollment-kendo-grid-api
+        image: ACR_NAME.azurecr.io/enrollmentkendogridapi:IMAGE_TAG
         ports:
         - containerPort: 8080
         env:
         - name: APPLICATION_CONFIGURATION_ENDPOINT
           value: "APP_CONFIG_ENDPOINT"
         - name: baseBslUrl
-          value: "http://contoso-kendo-grid-bsl:8080/" # NOSONAR - DEV only
+          value: "http://enrollment-kendo-grid-bsl:8080/" # NOSONAR - DEV only
         - name: keyVaultUrl
           valueFrom:
             secretKeyRef:
@@ -350,12 +350,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: contoso-kendo-grid-api
-  namespace: CONTOSO_APP_NAMESPACE
+  name: enrollment-kendo-grid-api
+  namespace: ENROLLMENT_APP_NAMESPACE
 spec:
   type: ClusterIP
   selector:
-    app: contoso-kendo-grid-api
+    app: enrollment-kendo-grid-api
   ports:
   - port: 8080
     targetPort: 8080
@@ -365,35 +365,35 @@ spec:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: CONTOSO_BSL_SERVICEACCOUNT_NAME
-  namespace: CONTOSO_APP_NAMESPACE
+  name: ENROLLMENT_BSL_SERVICEACCOUNT_NAME
+  namespace: ENROLLMENT_APP_NAMESPACE
   annotations:
-    azure.workload.identity/client-id: "CONTOSO_BSL_IDENTITY_CLIENTID"
+    azure.workload.identity/client-id: "ENROLLMENT_BSL_IDENTITY_CLIENTID"
 
 ---
-# 5. contoso-bsl
+# 5. enrollment-bsl
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: contoso-bsl
-  namespace: CONTOSO_APP_NAMESPACE
+  name: enrollment-bsl
+  namespace: ENROLLMENT_APP_NAMESPACE
   labels:
-    app: contoso-bsl
+    app: enrollment-bsl
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: contoso-bsl
+      app: enrollment-bsl
   template:
     metadata:
       labels:
-        app: contoso-bsl
+        app: enrollment-bsl
     spec:
       automountServiceAccountToken: false
-      serviceAccountName: CONTOSO_BSL_SERVICEACCOUNT_NAME
+      serviceAccountName: ENROLLMENT_BSL_SERVICEACCOUNT_NAME
       containers:
-      - name: contoso-bsl
-        image: ACR_NAME.azurecr.io/contosobsl:IMAGE_TAG
+      - name: enrollment-bsl
+        image: ACR_NAME.azurecr.io/enrollmentbsl:IMAGE_TAG
         ports:
         - containerPort: 8080
         env:
@@ -434,12 +434,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: contoso-bsl
-  namespace: CONTOSO_APP_NAMESPACE
+  name: enrollment-bsl
+  namespace: ENROLLMENT_APP_NAMESPACE
 spec:
   type: ClusterIP
   selector:
-    app: contoso-bsl
+    app: enrollment-bsl
   ports:
   - port: 8080
     targetPort: 8080
@@ -449,35 +449,35 @@ spec:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: CONTOSO_KENDO_GRID_BSL_SERVICEACCOUNT_NAME
-  namespace: CONTOSO_APP_NAMESPACE
+  name: ENROLLMENT_KENDO_GRID_BSL_SERVICEACCOUNT_NAME
+  namespace: ENROLLMENT_APP_NAMESPACE
   annotations:
-    azure.workload.identity/client-id: "CONTOSO_KENDO_GRID_BSL_IDENTITY_CLIENTID"
+    azure.workload.identity/client-id: "ENROLLMENT_KENDO_GRID_BSL_IDENTITY_CLIENTID"
 
 ---
 # 6. kendo-grid-bsl
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: contoso-kendo-grid-bsl
-  namespace: CONTOSO_APP_NAMESPACE
+  name: enrollment-kendo-grid-bsl
+  namespace: ENROLLMENT_APP_NAMESPACE
   labels:
-    app: contoso-kendo-grid-bsl
+    app: enrollment-kendo-grid-bsl
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: contoso-kendo-grid-bsl
+      app: enrollment-kendo-grid-bsl
   template:
     metadata:
       labels:
-        app: contoso-kendo-grid-bsl
+        app: enrollment-kendo-grid-bsl
     spec:
       automountServiceAccountToken: false
-      serviceAccountName: CONTOSO_KENDO_GRID_BSL_SERVICEACCOUNT_NAME
+      serviceAccountName: ENROLLMENT_KENDO_GRID_BSL_SERVICEACCOUNT_NAME
       containers:
-      - name: contoso-kendo-grid-bsl
-        image: ACR_NAME.azurecr.io/contosokendogridbsl:IMAGE_TAG
+      - name: enrollment-kendo-grid-bsl
+        image: ACR_NAME.azurecr.io/enrollmentkendogridbsl:IMAGE_TAG
         ports:
         - containerPort: 8080
         env:
@@ -518,12 +518,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: contoso-kendo-grid-bsl
-  namespace: CONTOSO_APP_NAMESPACE
+  name: enrollment-kendo-grid-bsl
+  namespace: ENROLLMENT_APP_NAMESPACE
 spec:
   type: ClusterIP
   selector:
-    app: contoso-kendo-grid-bsl
+    app: enrollment-kendo-grid-bsl
   ports:
   - port: 8080
     targetPort: 8080
@@ -534,8 +534,8 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: contoso-spa-api-ingress
-  namespace: CONTOSO_APP_NAMESPACE
+  name: enrollment-spa-api-ingress
+  namespace: ENROLLMENT_APP_NAMESPACE
   annotations:
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
@@ -545,14 +545,14 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-  - host: contoso-spa-api.LOAD_BALANCER_IP.nip.io
+  - host: enrollment-spa-api.LOAD_BALANCER_IP.nip.io
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: contoso-spa-api
+            name: enrollment-spa-api
             port:
               number: 8080
 
@@ -561,8 +561,8 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: contoso-api-ingress
-  namespace: CONTOSO_APP_NAMESPACE
+  name: enrollment-api-ingress
+  namespace: ENROLLMENT_APP_NAMESPACE
   annotations:
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
@@ -572,14 +572,14 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-  - host: contoso-api.LOAD_BALANCER_IP.nip.io
+  - host: enrollment-api.LOAD_BALANCER_IP.nip.io
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: contoso-api
+            name: enrollment-api
             port:
               number: 8080
 
@@ -588,8 +588,8 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: contoso-kendo-grid-api-ingress
-  namespace: CONTOSO_APP_NAMESPACE
+  name: enrollment-kendo-grid-api-ingress
+  namespace: ENROLLMENT_APP_NAMESPACE
   annotations:
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
@@ -599,14 +599,14 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-  - host: contoso-kendo-grid-api.LOAD_BALANCER_IP.nip.io
+  - host: enrollment-kendo-grid-api.LOAD_BALANCER_IP.nip.io
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: contoso-kendo-grid-api
+            name: enrollment-kendo-grid-api
             port:
               number: 8080
 
@@ -615,8 +615,8 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: contoso-frontend-ingress
-  namespace: CONTOSO_APP_NAMESPACE
+  name: enrollment-frontend-ingress
+  namespace: ENROLLMENT_APP_NAMESPACE
   annotations:
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
@@ -626,13 +626,13 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-  - host: contoso.LOAD_BALANCER_IP.nip.io
+  - host: enrollment.LOAD_BALANCER_IP.nip.io
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: contoso-angular
+            name: enrollment-angular
             port:
               number: 80
