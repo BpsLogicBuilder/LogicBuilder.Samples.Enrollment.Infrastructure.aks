@@ -17,6 +17,9 @@ param nodeCount int = 3
 @description('AKS cluster node VM size')
 param nodeVmSize string = 'standard_d2ads_v7'
 
+@description('User pool node VM size')
+param userVmSize string = 'standard_d2ads_v7'
+
 @description('Admin username for AKS nodes')
 param adminUsername string = 'azureuser'
 
@@ -79,7 +82,7 @@ var appConfigurationName = '${projectName}-config-${uniqueSuffix}'
 var federatedCredentialAudience = 'api://AzureADTokenExchange'
 
 resource keyVault 'Microsoft.KeyVault/vaults@2026-02-01' existing = {
-  name: 'enrollment-kv-${uniqueString(resourceGroup().id)}'
+  name: 'enroll-kv-${uniqueString(resourceGroup().id)}' //enrollment-kv-<13 chars> exceeds 24 characters
   dependsOn: [createKeyVaultAndCertificate]
 }
 
@@ -226,6 +229,24 @@ resource aksCluster 'Microsoft.ContainerService/managedClusters@2024-02-01' = {
       workloadIdentity: {
         enabled: true
       }
+    }
+  }
+}
+
+resource userNodePool 'Microsoft.ContainerService/managedClusters/agentPools@2024-02-01' = {
+  parent: aksCluster
+  name: 'userpool'
+  properties: {
+    count: 2
+    vmSize: userVmSize
+    osType: 'Linux'
+    mode: 'User'
+    type: 'VirtualMachineScaleSets'
+    enableAutoScaling: true
+    minCount: 1
+    maxCount: 5
+    nodeLabels: {
+      workload: 'apps'
     }
   }
 }

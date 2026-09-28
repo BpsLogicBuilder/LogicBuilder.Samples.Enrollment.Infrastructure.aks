@@ -1,5 +1,5 @@
 @description('Specifies the name of the key vault.')
-param keyVaultName string ='enrollment-kv-${uniqueString(resourceGroup().id)}'
+param keyVaultName string ='enroll-kv-${uniqueString(resourceGroup().id)}' //enrollment-kv-<13 chars> exceeds 24 characters
 
 @description('Specifies the certificate name.')
 param certName string ='front-end-cert'

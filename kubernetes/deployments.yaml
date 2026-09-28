@@ -50,6 +50,8 @@ spec:
       labels:
         app: enrollment-angular
     spec:
+      nodeSelector:
+        workload: apps
       automountServiceAccountToken: false
       serviceAccountName: ENROLLMENT_ANGULAR_SERVICEACCOUNT_NAME
       containers:
@@ -132,6 +134,8 @@ spec:
       labels:
         app: enrollment-spa-api
     spec:
+      nodeSelector:
+        workload: apps
       automountServiceAccountToken: false
       serviceAccountName: ENROLLMENT_SPA_API_SERVICEACCOUNT_NAME
       containers:
@@ -212,6 +216,8 @@ spec:
         app: enrollment-api
         azure.workload.identity/use: "true"
     spec:
+      nodeSelector:
+        workload: apps
       automountServiceAccountToken: false
       serviceAccountName: ENROLLMENT_API_SERVICEACCOUNT_NAME
       containers:
@@ -230,7 +236,7 @@ spec:
               name: app-secrets
               key: keyVaultUrl
         - name: bslCertificateName
-          value: "frontend-client-cert"
+          value: "front-end-cert"
         - name: AllowedOrigins__0
           value: "*"
         envFrom:
@@ -301,6 +307,8 @@ spec:
         app: enrollment-kendo-grid-api
         azure.workload.identity/use: "true"
     spec:
+      nodeSelector:
+        workload: apps
       automountServiceAccountToken: false
       serviceAccountName: ENROLLMENT_KENDO_GRID_API_SERVICEACCOUNT_NAME
       containers:
@@ -319,7 +327,7 @@ spec:
               name: app-secrets
               key: keyVaultUrl
         - name: bslCertificateName
-          value: "frontend-client-cert"
+          value: "front-end-cert"
         - name: AllowedOrigins__0
           value: "*"
         envFrom:
@@ -389,6 +397,8 @@ spec:
       labels:
         app: enrollment-bsl
     spec:
+      nodeSelector:
+        workload: apps
       automountServiceAccountToken: false
       serviceAccountName: ENROLLMENT_BSL_SERVICEACCOUNT_NAME
       containers:
@@ -473,6 +483,8 @@ spec:
       labels:
         app: enrollment-kendo-grid-bsl
     spec:
+      nodeSelector:
+        workload: apps
       automountServiceAccountToken: false
       serviceAccountName: ENROLLMENT_KENDO_GRID_BSL_SERVICEACCOUNT_NAME
       containers:
