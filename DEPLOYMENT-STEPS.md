@@ -36,6 +36,7 @@ az deployment group create --resource-group $rg --template-file main.bicep
 ### Get credentials to create nginx-ingress controller 
 ```bash
 AKS_CLUSTER_NAME=$(az deployment group show --resource-group $rg --name main --query properties.outputs.aksClusterName.value -o tsv)
+AKS_CLUSTER_NAME=$(echo "$AKS_CLUSTER_NAME" | tr -d '\r')
 az aks get-credentials --resource-group $rg --name $AKS_CLUSTER_NAME --overwrite-existing
 ```
 ### Install nginx-ingress controller
@@ -78,12 +79,17 @@ From the following repositories, go the infrastructure folder and run the comman
 - LogicBuilder.Samples.Enrollment.Spa.Flow (1 image)
     ```bash
     az acr build --registry $acrName --image "enrollmentspaapi:${imageTag}" --image enrollmentspaapi:latest --file ./Enrollment.Spa.Api/Dockerfile .
+
+- LogicBuilder.Samples.Enrollment.ChatHub (1 image)
+    ```bash
+    az acr build --registry $acrName --image "enrollmentchathub:${imageTag}" --image enrollmentchathub:latest --file ./Enrollment.ChatHub/Dockerfile .
     ```
 
 ### Deploy the manifests
 First get the following variables from the main.bicep deployment outputs:
 
 ```bash
+foundryRG="rg-foundry-iq"
 LOAD_BALANCER_IP=$(kubectl get service nginx-ingress-ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 
 ACR_NAME=$(az deployment group show --resource-group $rg --name main --query properties.outputs.acrName.value -o tsv)
@@ -100,11 +106,15 @@ ENROLLMENT_KENDO_GRID_API_IDENTITY_CLIENTID=$(az deployment group show --resourc
 
 ENROLLMENT_KENDO_GRID_BSL_IDENTITY_CLIENTID=$(az deployment group show --resource-group $rg --name main --query properties.outputs.enrollmentKendoGridBslManagedIdentityClientId.value -o tsv)
 
+ENROLLMENT_CHAT_HUB_IDENTITY_CLIENTID=$(az deployment group show --resource-group $rg --name main --query properties.outputs.enrollmentChatHubManagedIdentityClientId.value -o tsv)
+
 ENROLLMENT_SPA_API_IDENTITY_CLIENTID=$(az deployment group show --resource-group $rg --name main --query properties.outputs.enrollmentSpaApiManagedIdentityClientId.value -o tsv)
 
 ENROLLMENT_ANGULAR_IDENTITY_CLIENTID=$(az deployment group show --resource-group $rg --name main --query properties.outputs.enrollmentAngularManagedIdentityClientId.value -o tsv)
 
 ENROLLMENT_API_SERVICEACCOUNT_NAME=$(az deployment group show --resource-group $rg --name main --query properties.outputs.enrollmentApiServiceAccountName.value -o tsv)
+
+ENROLLMENT_CHAT_HUB_SERVICEACCOUNT_NAME=$(az deployment group show --resource-group $rg --name main --query properties.outputs.enrollmentChatHubServiceAccountName.value -o tsv)
 
 ENROLLMENT_BSL_SERVICEACCOUNT_NAME=$(az deployment group show --resource-group $rg --name main --query properties.outputs.enrollmentBslServiceAccountName.value -o tsv)
 
@@ -120,6 +130,8 @@ ENROLLMENT_APP_NAMESPACE=$(az deployment group show --resource-group $rg --name 
 
 EXPECTED_CERTIFICATE_THUMBPRINT=$(az deployment group show --resource-group $rg --name main --query properties.outputs.enrollmentBslCertificateThumbprint.value -o tsv)
 
+AZURE_AI_FOUNDRY_PROJECT_ENDPOINT=$(az deployment group show --resource-group $foundryRG --name main --query properties.outputs.resources.value.foundryProjectEndPoint -o tsv)
+
 ---
 Finally, run the following command to deploy the manifests.  The command will replace the placeholders in the manifests with the values from the main.bicep deployment outputs.
 
@@ -132,8 +144,10 @@ sed -e "s|LOAD_BALANCER_IP|${LOAD_BALANCER_IP}|g" \
         -e "s|ENROLLMENT_BSL_IDENTITY_CLIENTID|${ENROLLMENT_BSL_IDENTITY_CLIENTID}|g" \
         -e "s|ENROLLMENT_KENDO_GRID_API_IDENTITY_CLIENTID|${ENROLLMENT_KENDO_GRID_API_IDENTITY_CLIENTID}|g" \
         -e "s|ENROLLMENT_KENDO_GRID_BSL_IDENTITY_CLIENTID|${ENROLLMENT_KENDO_GRID_BSL_IDENTITY_CLIENTID}|g" \
+        -e "s|ENROLLMENT_CHAT_HUB_IDENTITY_CLIENTID|${ENROLLMENT_CHAT_HUB_IDENTITY_CLIENTID}|g" \
         -e "s|ENROLLMENT_SPA_API_IDENTITY_CLIENTID|${ENROLLMENT_SPA_API_IDENTITY_CLIENTID}|g" \
         -e "s|ENROLLMENT_ANGULAR_IDENTITY_CLIENTID|${ENROLLMENT_ANGULAR_IDENTITY_CLIENTID}|g" \
+        -e "s|ENROLLMENT_CHAT_HUB_SERVICEACCOUNT_NAME|${ENROLLMENT_CHAT_HUB_SERVICEACCOUNT_NAME}|g" \
         -e "s|ENROLLMENT_API_SERVICEACCOUNT_NAME|${ENROLLMENT_API_SERVICEACCOUNT_NAME}|g" \
         -e "s|ENROLLMENT_BSL_SERVICEACCOUNT_NAME|${ENROLLMENT_BSL_SERVICEACCOUNT_NAME}|g" \
         -e "s|ENROLLMENT_KENDO_GRID_API_SERVICEACCOUNT_NAME|${ENROLLMENT_KENDO_GRID_API_SERVICEACCOUNT_NAME}|g" \
@@ -142,6 +156,7 @@ sed -e "s|LOAD_BALANCER_IP|${LOAD_BALANCER_IP}|g" \
         -e "s|ENROLLMENT_ANGULAR_SERVICEACCOUNT_NAME|${ENROLLMENT_ANGULAR_SERVICEACCOUNT_NAME}|g" \
         -e "s|ENROLLMENT_APP_NAMESPACE|${ENROLLMENT_APP_NAMESPACE}|g" \
         -e "s|EXPECTED_CERTIFICATE_THUMBPRINT|${EXPECTED_CERTIFICATE_THUMBPRINT}|g" \
+        -e "s|FOUNDRY-PROJECT-ENDPOINT|${AZURE_AI_FOUNDRY_PROJECT_ENDPOINT}|g" \
         -e "s|IMAGE_TAG|latest|g" \
         kubernetes/deployments.yaml | tee /dev/tty | kubectl apply -f - -n ${ENROLLMENT_APP_NAMESPACE}
 ```
