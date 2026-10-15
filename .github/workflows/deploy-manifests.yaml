@@ -46,6 +46,7 @@ jobs:
       id: get_main_outputs
       env:
         RESOURCE_GROUP: ${{ secrets.AZURE_RG_ENROLLMENT_AKS }}
+        FOUNDRY_RESOURCE_GROUP: ${{ secrets.AZURE_RG_FOUNDRY_IQ }}
       run: |
         KEY_VAULT_NAME=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.keyVaultName.value -o tsv)
         echo "key_vault_name=$KEY_VAULT_NAME" >> $GITHUB_OUTPUT
@@ -74,6 +75,9 @@ jobs:
         ENROLLMENT_KENDO_GRID_BSL_IDENTITY_CLIENTID=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.enrollmentKendoGridBslManagedIdentityClientId.value -o tsv)
         echo "enrollment_kendo_grid_bsl_identity_clientid=$ENROLLMENT_KENDO_GRID_BSL_IDENTITY_CLIENTID" >> $GITHUB_OUTPUT
 
+        ENROLLMENT_CHAT_HUB_IDENTITY_CLIENTID=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.enrollmentChatHubManagedIdentityClientId.value -o tsv)
+        echo "enrollment_chat_hub_identity_clientid=$ENROLLMENT_CHAT_HUB_IDENTITY_CLIENTID" >> $GITHUB_OUTPUT
+
         ENROLLMENT_SPA_API_IDENTITY_CLIENTID=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.enrollmentSpaApiManagedIdentityClientId.value -o tsv)
         echo "enrollment_spa_api_identity_clientid=$ENROLLMENT_SPA_API_IDENTITY_CLIENTID" >> $GITHUB_OUTPUT
 
@@ -92,6 +96,9 @@ jobs:
         ENROLLMENT_KENDO_GRID_BSL_SERVICEACCOUNT_NAME=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.enrollmentKendoGridBslServiceAccountName.value -o tsv)
         echo "enrollment_kendo_grid_bsl_serviceaccount_name=$ENROLLMENT_KENDO_GRID_BSL_SERVICEACCOUNT_NAME" >> $GITHUB_OUTPUT
 
+        ENROLLMENT_CHAT_HUB_SERVICEACCOUNT_NAME=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.enrollmentChatHubServiceAccountName.value -o tsv)
+        echo "enrollment_chat_hub_serviceaccount_name=$ENROLLMENT_CHAT_HUB_SERVICEACCOUNT_NAME" >> $GITHUB_OUTPUT
+
         ENROLLMENT_SPA_API_SERVICEACCOUNT_NAME=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.enrollmentSpaApiServiceAccountName.value -o tsv)
         echo "enrollment_spa_api_serviceaccount_name=$ENROLLMENT_SPA_API_SERVICEACCOUNT_NAME" >> $GITHUB_OUTPUT
 
@@ -103,6 +110,9 @@ jobs:
 
         EXPECTED_CERTIFICATE_THUMBPRINT=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.enrollmentBslCertificateThumbprint.value -o tsv)
         echo "expected_certificate_thumbprint=$EXPECTED_CERTIFICATE_THUMBPRINT" >> $GITHUB_OUTPUT
+
+        AZURE_AI_FOUNDRY_PROJECT_ENDPOINT=$(az deployment group show --resource-group ${{ env.FOUNDRY_RESOURCE_GROUP }} --name main --query properties.outputs.resources.value.foundryProjectEndPoint -o tsv)
+        echo "azure_ai_foundry_project_endpoint=$AZURE_AI_FOUNDRY_PROJECT_ENDPOINT" >> $GITHUB_OUTPUT
 
     - name: Deploy namespace
       env:
@@ -131,16 +141,19 @@ jobs:
         ENROLLMENT_BSL_IDENTITY_CLIENTID: ${{ steps.get_main_outputs.outputs.enrollment_bsl_identity_clientid }}
         ENROLLMENT_KENDO_GRID_API_IDENTITY_CLIENTID: ${{ steps.get_main_outputs.outputs.enrollment_kendo_grid_api_identity_clientid }}
         ENROLLMENT_KENDO_GRID_BSL_IDENTITY_CLIENTID: ${{ steps.get_main_outputs.outputs.enrollment_kendo_grid_bsl_identity_clientid }}
+        ENROLLMENT_CHAT_HUB_IDENTITY_CLIENTID: ${{ steps.get_main_outputs.outputs.enrollment_chat_hub_identity_clientid }}
         ENROLLMENT_SPA_API_IDENTITY_CLIENTID: ${{ steps.get_main_outputs.outputs.enrollment_spa_api_identity_clientid }}
         ENROLLMENT_ANGULAR_IDENTITY_CLIENTID: ${{ steps.get_main_outputs.outputs.enrollment_angular_identity_clientid }}
         ENROLLMENT_API_SERVICEACCOUNT_NAME: ${{ steps.get_main_outputs.outputs.enrollment_api_serviceaccount_name }}
         ENROLLMENT_BSL_SERVICEACCOUNT_NAME: ${{ steps.get_main_outputs.outputs.enrollment_bsl_serviceaccount_name }}
         ENROLLMENT_KENDO_GRID_API_SERVICEACCOUNT_NAME: ${{ steps.get_main_outputs.outputs.enrollment_kendo_grid_api_serviceaccount_name }}
         ENROLLMENT_KENDO_GRID_BSL_SERVICEACCOUNT_NAME: ${{ steps.get_main_outputs.outputs.enrollment_kendo_grid_bsl_serviceaccount_name }}
+        ENROLLMENT_CHAT_HUB_SERVICEACCOUNT_NAME: ${{ steps.get_main_outputs.outputs.enrollment_chat_hub_serviceaccount_name }}
         ENROLLMENT_SPA_API_SERVICEACCOUNT_NAME: ${{ steps.get_main_outputs.outputs.enrollment_spa_api_serviceaccount_name }}
         ENROLLMENT_ANGULAR_SERVICEACCOUNT_NAME: ${{ steps.get_main_outputs.outputs.enrollment_angular_serviceaccount_name }}
         ENROLLMENT_APP_NAMESPACE: ${{ steps.get_main_outputs.outputs.enrollment_app_namespace }}
         EXPECTED_CERTIFICATE_THUMBPRINT: ${{ steps.get_main_outputs.outputs.expected_certificate_thumbprint }}
+        AZURE_AI_FOUNDRY_PROJECT_ENDPOINT: ${{ steps.get_main_outputs.outputs.azure_ai_foundry_project_endpoint }}
       run: |
         sed -e "s|LOAD_BALANCER_IP|${{ env.LOAD_BALANCER_IP }}|g" \
         -e "s|ACR_NAME|${{ env.ACR_NAME }}|g" \
@@ -150,16 +163,19 @@ jobs:
         -e "s|ENROLLMENT_BSL_IDENTITY_CLIENTID|${{ env.ENROLLMENT_BSL_IDENTITY_CLIENTID }}|g" \
         -e "s|ENROLLMENT_KENDO_GRID_API_IDENTITY_CLIENTID|${{ env.ENROLLMENT_KENDO_GRID_API_IDENTITY_CLIENTID }}|g" \
         -e "s|ENROLLMENT_KENDO_GRID_BSL_IDENTITY_CLIENTID|${{ env.ENROLLMENT_KENDO_GRID_BSL_IDENTITY_CLIENTID }}|g" \
+        -e "s|ENROLLMENT_CHAT_HUB_IDENTITY_CLIENTID|${{ env.ENROLLMENT_CHAT_HUB_IDENTITY_CLIENTID }}|g" \
         -e "s|ENROLLMENT_SPA_API_IDENTITY_CLIENTID|${{ env.ENROLLMENT_SPA_API_IDENTITY_CLIENTID }}|g" \
         -e "s|ENROLLMENT_ANGULAR_IDENTITY_CLIENTID|${{ env.ENROLLMENT_ANGULAR_IDENTITY_CLIENTID }}|g" \
         -e "s|ENROLLMENT_API_SERVICEACCOUNT_NAME|${{ env.ENROLLMENT_API_SERVICEACCOUNT_NAME }}|g" \
         -e "s|ENROLLMENT_BSL_SERVICEACCOUNT_NAME|${{ env.ENROLLMENT_BSL_SERVICEACCOUNT_NAME }}|g" \
         -e "s|ENROLLMENT_KENDO_GRID_API_SERVICEACCOUNT_NAME|${{ env.ENROLLMENT_KENDO_GRID_API_SERVICEACCOUNT_NAME }}|g" \
         -e "s|ENROLLMENT_KENDO_GRID_BSL_SERVICEACCOUNT_NAME|${{ env.ENROLLMENT_KENDO_GRID_BSL_SERVICEACCOUNT_NAME }}|g" \
+        -e "s|ENROLLMENT_CHAT_HUB_SERVICEACCOUNT_NAME|${{ env.ENROLLMENT_CHAT_HUB_SERVICEACCOUNT_NAME }}|g" \
         -e "s|ENROLLMENT_SPA_API_SERVICEACCOUNT_NAME|${{ env.ENROLLMENT_SPA_API_SERVICEACCOUNT_NAME }}|g" \
         -e "s|ENROLLMENT_ANGULAR_SERVICEACCOUNT_NAME|${{ env.ENROLLMENT_ANGULAR_SERVICEACCOUNT_NAME }}|g" \
         -e "s|ENROLLMENT_APP_NAMESPACE|${{ env.ENROLLMENT_APP_NAMESPACE }}|g" \
         -e "s|EXPECTED_CERTIFICATE_THUMBPRINT|${{ env.EXPECTED_CERTIFICATE_THUMBPRINT }}|g" \
+        -e "s|FOUNDRY-PROJECT-ENDPOINT|${{ env.AZURE_AI_FOUNDRY_PROJECT_ENDPOINT }}|g" \
         -e "s|IMAGE_TAG|v1.0.0|g" \
         kubernetes/deployments.yaml | tee /dev/tty | kubectl apply -f - -n ${{ env.ENROLLMENT_APP_NAMESPACE }}
 

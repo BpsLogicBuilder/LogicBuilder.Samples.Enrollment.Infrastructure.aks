@@ -44,6 +44,9 @@ param enrollmentKendoGridApiManagedIdentityName string = 'uai-${projectName}-ken
 @description('Managed Identity for enrollment-kendo-grid-bsl')
 param enrollmentKendoGridBslManagedIdentityName string = 'uai-${projectName}-kendo-grid-bsl'
 
+@description('Managed Identity for enrollment-chat-hub')
+param enrollmentChatHubManagedIdentityName string = 'uai-${projectName}-chat-hub'
+
 @description('Managed Identity for enrollment-spa-api')
 param enrollmentSpaApiManagedIdentityName string = 'uai-${projectName}-spa-api'
 
@@ -65,6 +68,9 @@ param k8sEnrollmentKendoGridApiServiceAccountName string = 'sa-${projectName}-ke
 @description('When the service account is assigned to sa-enrollment-kendo-grid-bsl, they will receive the permissions assigned to the managed identity.')
 param k8sEnrollmentKendoGridBslServiceAccountName string = 'sa-${projectName}-kendo-grid-bsl'
 
+@description('When the service account is assigned to sa-enrollment-chat-hub, they will receive the permissions assigned to the managed identity.')
+param k8sEnrollmentChatHubServiceAccountName string = 'sa-${projectName}-chat-hub'
+
 @description('When the service account is assigned to sa-enrollment-spa-api, they will receive the permissions assigned to the managed identity.')
 param k8sEnrollmentSpaApiServiceAccountName string = 'sa-${projectName}-spa-api'
 
@@ -80,6 +86,21 @@ var logAnalyticsName = '${projectName}-logs-${uniqueSuffix}'
 var appInsightsName = '${projectName}-insights-${uniqueSuffix}'
 var appConfigurationName = '${projectName}-config-${uniqueSuffix}'
 var federatedCredentialAudience = 'api://AzureADTokenExchange'
+
+var foundryResourceGroupName = 'rg-foundry-iq'
+var foundrySuffix = uniqueString(subscription().subscriptionId, foundryResourceGroup.id)
+var foundryAccountResourceName = 'bps-foundry-iq-${foundrySuffix}'
+var foundryUserRoleDefinitionID string = '53ca6127-db72-4b80-b1b0-d745d6d5456d'
+
+resource foundryAccountResource 'Microsoft.CognitiveServices/accounts@2025-06-01' existing = {
+  name: foundryAccountResourceName
+  scope: resourceGroup(foundryResourceGroupName)
+}
+
+resource foundryResourceGroup 'Microsoft.Resources/resourceGroups@2025-04-01' existing = {
+  name: foundryResourceGroupName
+  scope: subscription()
+}
 
 resource keyVault 'Microsoft.KeyVault/vaults@2026-02-01' existing = {
   name: 'enroll-kv-${uniqueString(resourceGroup().id)}' //enrollment-kv-<13 chars> exceeds 24 characters
@@ -282,6 +303,11 @@ resource enrollmentKendoGridBslManagedIdentity 'Microsoft.ManagedIdentity/userAs
   location: location
 }
 
+resource enrollmentChatHubManagedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: enrollmentChatHubManagedIdentityName
+  location: location
+}
+
 resource enrollmentSpaApiManagedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   name: enrollmentSpaApiManagedIdentityName
   location: location
@@ -337,6 +363,18 @@ resource enrollmentKendoGridBslFederatedCredential 'Microsoft.ManagedIdentity/us
     ]
     issuer: aksCluster.properties.oidcIssuerProfile.issuerURL
     subject: 'system:serviceaccount:${k8sNamespace}:${k8sEnrollmentKendoGridBslServiceAccountName}'
+  }
+}
+
+resource enrollmentChatHubFederatedCredential 'Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials@2023-01-31' = {
+  parent: enrollmentChatHubManagedIdentity
+  name: 'fed-${enrollmentChatHubManagedIdentityName}'
+  properties: {
+    audiences: [
+      federatedCredentialAudience
+    ]
+    issuer: aksCluster.properties.oidcIssuerProfile.issuerURL
+    subject: 'system:serviceaccount:${k8sNamespace}:${k8sEnrollmentChatHubServiceAccountName}'
   }
 }
 
@@ -455,6 +493,14 @@ module kendoGridBslManagedIdentityToAppConfigDataReaderRoleAssignment './assign-
   }
 }
 
+module chatHubManagedIdentityToAppConfigDataReaderRoleAssignment './assign-app-config-data-reader-role-to-managed-identity.bicep' = {
+  name: 'chatHubManagedIdentityToAppConfigRoleAssignment'
+  params: {
+    managedIdentityName: enrollmentChatHubManagedIdentity.name
+    appConfigName: appConfiguration.name
+  }
+}
+
 module spaApiManagedIdentityToAppConfigDataReaderRoleAssignment './assign-app-config-data-reader-role-to-managed-identity.bicep' = {
   name: 'spaApiManagedIdentityToAppConfigRoleAssignment'
   params: {
@@ -468,6 +514,16 @@ module angularManagedIdentityToAppConfigDataReaderRoleAssignment './assign-app-c
   params: {
     managedIdentityName: enrollmentAngularManagedIdentity.name
     appConfigName: appConfiguration.name
+  }
+}
+
+module chatHubManagedIdentityToFoundryRoleAssignment './assign-foundry-user-access-to-managed-identity.bicep' = {
+  name: 'chatHubServiceToFoundryRoleAssignment'
+  scope: resourceGroup(foundryResourceGroupName)
+  params: {
+    foundryAccountResourceName: foundryAccountResource.name
+    managedIdentityPrincipalId: enrollmentChatHubManagedIdentity.properties.principalId
+    managedIdentityToFoundryRoleAssignmentName: guid(enrollmentChatHubManagedIdentity.id, foundryUserRoleDefinitionID, foundryAccountResource.id)
   }
 }
 
@@ -488,12 +544,14 @@ output enrollmentApiManagedIdentityClientId string = enrollmentApiManagedIdentit
 output enrollmentBslManagedIdentityClientId string = enrollmentBslManagedIdentity.properties.clientId
 output enrollmentKendoGridApiManagedIdentityClientId string = enrollmentKendoGridApiManagedIdentity.properties.clientId
 output enrollmentKendoGridBslManagedIdentityClientId string = enrollmentKendoGridBslManagedIdentity.properties.clientId
+output enrollmentChatHubManagedIdentityClientId string = enrollmentChatHubManagedIdentity.properties.clientId
 output enrollmentSpaApiManagedIdentityClientId string = enrollmentSpaApiManagedIdentity.properties.clientId
 output enrollmentAngularManagedIdentityClientId string = enrollmentAngularManagedIdentity.properties.clientId
 output enrollmentApiServiceAccountName string = k8sEnrollmentApiServiceAccountName
 output enrollmentBslServiceAccountName string = k8sEnrollmentBslServiceAccountName
 output enrollmentKendoGridApiServiceAccountName string = k8sEnrollmentKendoGridApiServiceAccountName
 output enrollmentKendoGridBslServiceAccountName string = k8sEnrollmentKendoGridBslServiceAccountName
+output enrollmentChatHubServiceAccountName string = k8sEnrollmentChatHubServiceAccountName
 output enrollmentSpaApiServiceAccountName string = k8sEnrollmentSpaApiServiceAccountName
 output enrollmentAngularServiceAccountName string = k8sEnrollmentAngularServiceAccountName
 output kubernetesNamespace string = k8sNamespace
