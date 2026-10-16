@@ -1,0 +1,326 @@
+# Kubernetes Deployments and Services for 6 Applications
+# This file contains all deployments, services, and ingress configuration
+
+# The following items will be updated with output values from the main.bicep deployment
+
+#   LOAD_BALANCER_IP
+#   APP_INSIGHTS_CONNECTION_STRING
+#   ENROLLMENT_API_IDENTITY_CLIENTID
+#   ENROLLMENT_API_SERVICEACCOUNT_NAME
+#   ENROLLMENT_APP_NAMESPACE
+
+---
+# ConfigMap for Application Insights
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: ENROLLMENT_APP_NAMESPACE
+data:
+  APPLICATIONINSIGHTS_CONNECTION_STRING: "APP_INSIGHTS_CONNECTION_STRING" # Will be set during deployment
+  ASPNETCORE_ENVIRONMENT: "Development"
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ENROLLMENT_ANGULAR_SERVICEACCOUNT_NAME
+  namespace: ENROLLMENT_APP_NAMESPACE
+  annotations:
+    azure.workload.identity/client-id: "ENROLLMENT_ANGULAR_IDENTITY_CLIENTID"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: enrollment-angular
+  namespace: ENROLLMENT_APP_NAMESPACE
+spec:
+  type: ClusterIP
+  selector:
+    app: enrollment-angular
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ENROLLMENT_CHAT_HUB_SERVICEACCOUNT_NAME
+  namespace: ENROLLMENT_APP_NAMESPACE
+  annotations:
+    azure.workload.identity/client-id: "ENROLLMENT_CHAT_HUB_IDENTITY_CLIENTID"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: enrollment-chat-hub
+  namespace: ENROLLMENT_APP_NAMESPACE
+spec:
+  type: ClusterIP
+  selector:
+    app: enrollment-chat-hub
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ENROLLMENT_SPA_API_SERVICEACCOUNT_NAME
+  namespace: ENROLLMENT_APP_NAMESPACE
+  annotations:
+    azure.workload.identity/client-id: "ENROLLMENT_SPA_API_IDENTITY_CLIENTID"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: enrollment-spa-api
+  namespace: ENROLLMENT_APP_NAMESPACE
+spec:
+  type: ClusterIP
+  selector:
+    app: enrollment-spa-api
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ENROLLMENT_API_SERVICEACCOUNT_NAME
+  namespace: ENROLLMENT_APP_NAMESPACE
+  annotations:
+    azure.workload.identity/client-id: "ENROLLMENT_API_IDENTITY_CLIENTID"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: enrollment-api
+  namespace: ENROLLMENT_APP_NAMESPACE
+spec:
+  type: ClusterIP
+  selector:
+    app: enrollment-api
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ENROLLMENT_KENDO_GRID_API_SERVICEACCOUNT_NAME
+  namespace: ENROLLMENT_APP_NAMESPACE
+  annotations:
+    azure.workload.identity/client-id: "ENROLLMENT_KENDO_GRID_API_IDENTITY_CLIENTID"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: enrollment-kendo-grid-api
+  namespace: ENROLLMENT_APP_NAMESPACE
+spec:
+  type: ClusterIP
+  selector:
+    app: enrollment-kendo-grid-api
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ENROLLMENT_BSL_SERVICEACCOUNT_NAME
+  namespace: ENROLLMENT_APP_NAMESPACE
+  annotations:
+    azure.workload.identity/client-id: "ENROLLMENT_BSL_IDENTITY_CLIENTID"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: enrollment-bsl
+  namespace: ENROLLMENT_APP_NAMESPACE
+spec:
+  type: ClusterIP
+  selector:
+    app: enrollment-bsl
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ENROLLMENT_KENDO_GRID_BSL_SERVICEACCOUNT_NAME
+  namespace: ENROLLMENT_APP_NAMESPACE
+  annotations:
+    azure.workload.identity/client-id: "ENROLLMENT_KENDO_GRID_BSL_IDENTITY_CLIENTID"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: enrollment-kendo-grid-bsl
+  namespace: ENROLLMENT_APP_NAMESPACE
+spec:
+  type: ClusterIP
+  selector:
+    app: enrollment-kendo-grid-bsl
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+
+---
+# Ingress for chat hub
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: enrollment-chat-hub-ingress
+  namespace: ENROLLMENT_APP_NAMESPACE
+  annotations:
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,x-signalr-user-agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "http://enrollment.LOAD_BALANCER_IP.nip.io" # NOSONAR - DEV Only
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: enrollment-chat-hub.LOAD_BALANCER_IP.nip.io
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: enrollment-chat-hub
+            port:
+              number: 8080
+
+---
+# Ingress for Workflow API
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: enrollment-spa-api-ingress
+  namespace: ENROLLMENT_APP_NAMESPACE
+  annotations:
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: enrollment-spa-api.LOAD_BALANCER_IP.nip.io
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: enrollment-spa-api
+            port:
+              number: 8080
+
+---
+# Ingress for CRUD API
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: enrollment-api-ingress
+  namespace: ENROLLMENT_APP_NAMESPACE
+  annotations:
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: enrollment-api.LOAD_BALANCER_IP.nip.io
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: enrollment-api
+            port:
+              number: 8080
+
+---
+# Ingress for Kendo Grid API
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: enrollment-kendo-grid-api-ingress
+  namespace: ENROLLMENT_APP_NAMESPACE
+  annotations:
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: enrollment-kendo-grid-api.LOAD_BALANCER_IP.nip.io
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: enrollment-kendo-grid-api
+            port:
+              number: 8080
+
+---
+# Ingress for Angular Frontend
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: enrollment-frontend-ingress
+  namespace: ENROLLMENT_APP_NAMESPACE
+  annotations:
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: enrollment.LOAD_BALANCER_IP.nip.io
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: enrollment-angular
+            port:
+              number: 80

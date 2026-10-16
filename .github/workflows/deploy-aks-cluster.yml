@@ -2,7 +2,8 @@ on: [workflow_dispatch]
 name: Deploy AKS Cluster
 
 jobs:
-  build-and-deploy:
+  deploy-infrastructure:
+    name: Deploy Infrastructure
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -29,10 +30,37 @@ jobs:
         template: ./main.bicep
         failOnStdErr: false
 
+  install-nginx:
+    name: Install Nginx
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    needs: deploy-infrastructure
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+
+    - name: Login to Azure
+      uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
+      with:
+        client-id: ${{ secrets.ARM_DEPLOYER_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+    - name: Get AKS cluster name
+      id: get_aks_cluster
+      env:
+        RESOURCE_GROUP: ${{ secrets.AZURE_RG_ENROLLMENT_AKS }}
+      run: |
+        AKS_CLUSTER_NAME=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.aksClusterName.value -o tsv)
+        echo "aks_cluster_name=$AKS_CLUSTER_NAME" >> $GITHUB_OUTPUT
+
     - name: Get AKS Credentials
       env:
         RESOURCE_GROUP: ${{ secrets.AZURE_RG_ENROLLMENT_AKS }}
-        AKS_CLUSTER_NAME: ${{ steps.deployClusterStep.outputs.aksClusterName }}
+        AKS_CLUSTER_NAME: ${{ steps.get_aks_cluster.outputs.aks_cluster_name }}
       run: |
         az aks get-credentials --resource-group ${{ env.RESOURCE_GROUP }} --name ${{ env.AKS_CLUSTER_NAME }}
 
@@ -40,5 +68,264 @@ jobs:
       run: |
         helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
         helm repo update
-        helm install nginx-ingress ingress-nginx/ingress-nginx --namespace ingress-nginx --create-namespace --set controller.replicaCount=2 --set controller.nodeSelector.'kubernetes\.io/os'=linux --set controller.service.annotations.'service\.beta\.kubernetes\.io/azure-load-balancer-health-probe-request-path'=/healthz
+        helm upgrade --install nginx-ingress ingress-nginx/ingress-nginx --namespace ingress-nginx --create-namespace --set controller.replicaCount=2 --set controller.nodeSelector.'kubernetes\.io/os'=linux --set controller.service.annotations.'service\.beta\.kubernetes\.io/azure-load-balancer-health-probe-request-path'=/healthz
+
+    - name: Wait for Nginx Load Balancer IP
+      run: |
+        echo "Waiting for the ingress controller deployment to be ready..."
+        # Wait unitil pods are ready before checking for IP.  This prevents downstream crashes
+        kubectl rollout status deployment/nginx-ingress-ingress-nginx-controller -n ingress-nginx --timeout=90s
+        
+        echo "Waiting for the LoadBalancer external IP to be assigned..."
+        until [ -n "$(kubectl get svc nginx-ingress-ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}')" ]; do
+          echo "Still waiting for external IP..."
+          sleep 5
+        done
+        
+        LB_IP=$(kubectl get svc nginx-ingress-ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+        echo "Load Balancer is ready!"
+        echo "IP: ${LB_IP}"
     
+  add-secrets:
+    name: Add Secrets
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    needs: install-nginx
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+      
+    - name: Login to Azure
+      uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
+      with:
+        client-id: ${{ secrets.ARM_DEPLOYER_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+    - name: Fetch AKS cluster Deployment Outputs
+      id: get_main_outputs
+      env:
+        RESOURCE_GROUP: ${{ secrets.AZURE_RG_ENROLLMENT_AKS }}
+      run: |
+        AKS_CLUSTER_NAME=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.aksClusterName.value -o tsv)
+        echo "::add-mask::$AKS_CLUSTER_NAME"
+
+        KEY_VAULT_NAME=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.keyVaultName.value -o tsv)
+        echo "::add-mask::$KEY_VAULT_NAME"
+
+        ENROLLMENT_APP_NAMESPACE=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.kubernetesNamespace.value -o tsv)
+        echo "::add-mask::$ENROLLMENT_APP_NAMESPACE"
+
+        echo "aks_cluster_name=$AKS_CLUSTER_NAME" >> $GITHUB_OUTPUT
+        echo "key_vault_name=$KEY_VAULT_NAME" >> $GITHUB_OUTPUT
+        echo "enrollment_app_namespace=$ENROLLMENT_APP_NAMESPACE" >> $GITHUB_OUTPUT
+
+    - name: Get AKS Credentials
+      env:
+        RESOURCE_GROUP: ${{ secrets.AZURE_RG_ENROLLMENT_AKS }}
+        AKS_CLUSTER_NAME: ${{ steps.get_main_outputs.outputs.aks_cluster_name }}
+      run: |
+        az aks get-credentials --resource-group ${{ env.RESOURCE_GROUP }} --name ${{ env.AKS_CLUSTER_NAME }}
+
+    - name: Deploy namespace
+      env:
+        ENROLLMENT_APP_NAMESPACE: ${{ steps.get_main_outputs.outputs.enrollment_app_namespace }}
+      run: |
+        sed -e "s|ENROLLMENT_APP_NAMESPACE|${ENROLLMENT_APP_NAMESPACE}|g" \
+        kubernetes/namespace.yaml | tee /dev/tty | kubectl apply -f - -n ${{ env.ENROLLMENT_APP_NAMESPACE }}
+
+    - name: Add Secrets to namespace
+      env:
+        CONNECTION_STRING: ${{ secrets.ENROLLMENT_DB_CONNECTION_STRING }}
+        ENROLLMENT_APP_NAMESPACE: ${{ steps.get_main_outputs.outputs.enrollment_app_namespace }}
+        KEY_VAULT_NAME: ${{ steps.get_main_outputs.outputs.key_vault_name }}
+      # "--dry-run=client -o yaml | kubectl apply -f -" updates the secret if it already exists
+      run: |
+        kubectl create secret generic app-secrets --namespace=${{ env.ENROLLMENT_APP_NAMESPACE }} \
+        --from-literal=keyVaultUrl="https://${KEY_VAULT_NAME}.vault.azure.net/" \
+        --from-literal=db-connection-string="${{ env.CONNECTION_STRING }}" \
+        --dry-run=client -o yaml | kubectl apply -f -
+
+  apply-service-manifests:
+    name: Apply Service Manifests
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    needs: add-secrets
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+      
+    - name: Login to Azure
+      uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
+      with:
+        client-id: ${{ secrets.ARM_DEPLOYER_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+    - name: Get AKS cluster name
+      id: get_aks_cluster
+      env:
+        AZURE_RG_ENROLLMENT_AKS: ${{ secrets.AZURE_RG_ENROLLMENT_AKS }}
+      run: |
+        AKS_CLUSTER_NAME=$(az deployment group show --resource-group ${{ env.AZURE_RG_ENROLLMENT_AKS }} --name main --query properties.outputs.aksClusterName.value -o tsv)
+        echo "aks_cluster_name=$AKS_CLUSTER_NAME" >> $GITHUB_OUTPUT
+
+    - name: Get AKS Credentials
+      env:
+        RESOURCE_GROUP: ${{ secrets.AZURE_RG_ENROLLMENT_AKS }}
+        AKS_CLUSTER_NAME: ${{ steps.get_aks_cluster.outputs.aks_cluster_name }}
+      run: |
+        az aks get-credentials --resource-group ${{ env.RESOURCE_GROUP }} --name ${{ env.AKS_CLUSTER_NAME }}
+
+    - name: Fetch AKS cluster Deployment Outputs
+      id: get_main_outputs
+      env:
+        RESOURCE_GROUP: ${{ secrets.AZURE_RG_ENROLLMENT_AKS }}
+      run: |
+        KEY_VAULT_NAME=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.keyVaultName.value -o tsv)
+        echo "::add-mask::$KEY_VAULT_NAME"
+        echo "key_vault_name=$KEY_VAULT_NAME" >> $GITHUB_OUTPUT
+
+        LOAD_BALANCER_IP=$(kubectl get service nginx-ingress-ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+        echo "::add-mask::$LOAD_BALANCER_IP"
+        echo "load_balancer_ip=$LOAD_BALANCER_IP" >> $GITHUB_OUTPUT
+
+        APP_INSIGHTS_CONNECTION_STRING=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.appInsightsConnectionString.value -o tsv)
+        echo "::add-mask::$APP_INSIGHTS_CONNECTION_STRING"
+        echo "app_insights_connection_string=$APP_INSIGHTS_CONNECTION_STRING" >> $GITHUB_OUTPUT
+
+        ENROLLMENT_API_IDENTITY_CLIENTID=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.enrollmentApiManagedIdentityClientId.value -o tsv)
+        echo "::add-mask::$ENROLLMENT_API_IDENTITY_CLIENTID"
+        echo "enrollment_api_identity_clientid=$ENROLLMENT_API_IDENTITY_CLIENTID" >> $GITHUB_OUTPUT
+
+        ENROLLMENT_BSL_IDENTITY_CLIENTID=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.enrollmentBslManagedIdentityClientId.value -o tsv)
+        echo "::add-mask::$ENROLLMENT_BSL_IDENTITY_CLIENTID"
+        echo "enrollment_bsl_identity_clientid=$ENROLLMENT_BSL_IDENTITY_CLIENTID" >> $GITHUB_OUTPUT
+
+        ENROLLMENT_KENDO_GRID_API_IDENTITY_CLIENTID=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.enrollmentKendoGridApiManagedIdentityClientId.value -o tsv)
+        echo "::add-mask::$ENROLLMENT_KENDO_GRID_API_IDENTITY_CLIENTID"
+        echo "enrollment_kendo_grid_api_identity_clientid=$ENROLLMENT_KENDO_GRID_API_IDENTITY_CLIENTID" >> $GITHUB_OUTPUT
+
+        ENROLLMENT_KENDO_GRID_BSL_IDENTITY_CLIENTID=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.enrollmentKendoGridBslManagedIdentityClientId.value -o tsv)
+        echo "::add-mask::$ENROLLMENT_KENDO_GRID_BSL_IDENTITY_CLIENTID"
+        echo "enrollment_kendo_grid_bsl_identity_clientid=$ENROLLMENT_KENDO_GRID_BSL_IDENTITY_CLIENTID" >> $GITHUB_OUTPUT
+
+        ENROLLMENT_CHAT_HUB_IDENTITY_CLIENTID=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.enrollmentChatHubManagedIdentityClientId.value -o tsv)
+        echo "::add-mask::$ENROLLMENT_CHAT_HUB_IDENTITY_CLIENTID"
+        echo "enrollment_chat_hub_identity_clientid=$ENROLLMENT_CHAT_HUB_IDENTITY_CLIENTID" >> $GITHUB_OUTPUT
+
+        ENROLLMENT_SPA_API_IDENTITY_CLIENTID=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.enrollmentSpaApiManagedIdentityClientId.value -o tsv)
+        echo "::add-mask::$ENROLLMENT_SPA_API_IDENTITY_CLIENTID"
+        echo "enrollment_spa_api_identity_clientid=$ENROLLMENT_SPA_API_IDENTITY_CLIENTID" >> $GITHUB_OUTPUT
+
+        ENROLLMENT_ANGULAR_IDENTITY_CLIENTID=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.enrollmentAngularManagedIdentityClientId.value -o tsv)
+        echo "::add-mask::$ENROLLMENT_ANGULAR_IDENTITY_CLIENTID"
+        echo "enrollment_angular_identity_clientid=$ENROLLMENT_ANGULAR_IDENTITY_CLIENTID" >> $GITHUB_OUTPUT
+
+        ENROLLMENT_API_SERVICEACCOUNT_NAME=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.enrollmentApiServiceAccountName.value -o tsv)
+        echo "::add-mask::$ENROLLMENT_API_SERVICEACCOUNT_NAME"
+        echo "enrollment_api_serviceaccount_name=$ENROLLMENT_API_SERVICEACCOUNT_NAME" >> $GITHUB_OUTPUT
+
+        ENROLLMENT_BSL_SERVICEACCOUNT_NAME=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.enrollmentBslServiceAccountName.value -o tsv)
+        echo "::add-mask::$ENROLLMENT_BSL_SERVICEACCOUNT_NAME"
+        echo "enrollment_bsl_serviceaccount_name=$ENROLLMENT_BSL_SERVICEACCOUNT_NAME" >> $GITHUB_OUTPUT
+
+        ENROLLMENT_KENDO_GRID_API_SERVICEACCOUNT_NAME=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.enrollmentKendoGridApiServiceAccountName.value -o tsv)
+        echo "::add-mask::$ENROLLMENT_KENDO_GRID_API_SERVICEACCOUNT_NAME"
+        echo "enrollment_kendo_grid_api_serviceaccount_name=$ENROLLMENT_KENDO_GRID_API_SERVICEACCOUNT_NAME" >> $GITHUB_OUTPUT
+
+        ENROLLMENT_KENDO_GRID_BSL_SERVICEACCOUNT_NAME=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.enrollmentKendoGridBslServiceAccountName.value -o tsv)
+        echo "::add-mask::$ENROLLMENT_KENDO_GRID_BSL_SERVICEACCOUNT_NAME"
+        echo "enrollment_kendo_grid_bsl_serviceaccount_name=$ENROLLMENT_KENDO_GRID_BSL_SERVICEACCOUNT_NAME" >> $GITHUB_OUTPUT
+
+        ENROLLMENT_CHAT_HUB_SERVICEACCOUNT_NAME=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.enrollmentChatHubServiceAccountName.value -o tsv)
+        echo "::add-mask::$ENROLLMENT_CHAT_HUB_SERVICEACCOUNT_NAME"
+        echo "enrollment_chat_hub_serviceaccount_name=$ENROLLMENT_CHAT_HUB_SERVICEACCOUNT_NAME" >> $GITHUB_OUTPUT
+
+        ENROLLMENT_SPA_API_SERVICEACCOUNT_NAME=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.enrollmentSpaApiServiceAccountName.value -o tsv)
+        echo "::add-mask::$ENROLLMENT_SPA_API_SERVICEACCOUNT_NAME"
+        echo "enrollment_spa_api_serviceaccount_name=$ENROLLMENT_SPA_API_SERVICEACCOUNT_NAME" >> $GITHUB_OUTPUT
+
+        ENROLLMENT_ANGULAR_SERVICEACCOUNT_NAME=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.enrollmentAngularServiceAccountName.value -o tsv)
+        echo "::add-mask::$ENROLLMENT_ANGULAR_SERVICEACCOUNT_NAME"
+        echo "enrollment_angular_serviceaccount_name=$ENROLLMENT_ANGULAR_SERVICEACCOUNT_NAME" >> $GITHUB_OUTPUT
+
+        ENROLLMENT_APP_NAMESPACE=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.kubernetesNamespace.value -o tsv)
+        echo "::add-mask::$ENROLLMENT_APP_NAMESPACE"
+        echo "enrollment_app_namespace=$ENROLLMENT_APP_NAMESPACE" >> $GITHUB_OUTPUT
+
+    - name: Apply Service Manifests
+      env:
+        LOAD_BALANCER_IP: ${{ steps.get_main_outputs.outputs.load_balancer_ip }}
+        APP_INSIGHTS_CONNECTION_STRING: ${{ steps.get_main_outputs.outputs.app_insights_connection_string }}
+        ENROLLMENT_API_IDENTITY_CLIENTID: ${{ steps.get_main_outputs.outputs.enrollment_api_identity_clientid }}
+        ENROLLMENT_BSL_IDENTITY_CLIENTID: ${{ steps.get_main_outputs.outputs.enrollment_bsl_identity_clientid }}
+        ENROLLMENT_KENDO_GRID_API_IDENTITY_CLIENTID: ${{ steps.get_main_outputs.outputs.enrollment_kendo_grid_api_identity_clientid }}
+        ENROLLMENT_KENDO_GRID_BSL_IDENTITY_CLIENTID: ${{ steps.get_main_outputs.outputs.enrollment_kendo_grid_bsl_identity_clientid }}
+        ENROLLMENT_CHAT_HUB_IDENTITY_CLIENTID: ${{ steps.get_main_outputs.outputs.enrollment_chat_hub_identity_clientid }}
+        ENROLLMENT_SPA_API_IDENTITY_CLIENTID: ${{ steps.get_main_outputs.outputs.enrollment_spa_api_identity_clientid }}
+        ENROLLMENT_ANGULAR_IDENTITY_CLIENTID: ${{ steps.get_main_outputs.outputs.enrollment_angular_identity_clientid }}
+        ENROLLMENT_API_SERVICEACCOUNT_NAME: ${{ steps.get_main_outputs.outputs.enrollment_api_serviceaccount_name }}
+        ENROLLMENT_BSL_SERVICEACCOUNT_NAME: ${{ steps.get_main_outputs.outputs.enrollment_bsl_serviceaccount_name }}
+        ENROLLMENT_KENDO_GRID_API_SERVICEACCOUNT_NAME: ${{ steps.get_main_outputs.outputs.enrollment_kendo_grid_api_serviceaccount_name }}
+        ENROLLMENT_KENDO_GRID_BSL_SERVICEACCOUNT_NAME: ${{ steps.get_main_outputs.outputs.enrollment_kendo_grid_bsl_serviceaccount_name }}
+        ENROLLMENT_CHAT_HUB_SERVICEACCOUNT_NAME: ${{ steps.get_main_outputs.outputs.enrollment_chat_hub_serviceaccount_name }}
+        ENROLLMENT_SPA_API_SERVICEACCOUNT_NAME: ${{ steps.get_main_outputs.outputs.enrollment_spa_api_serviceaccount_name }}
+        ENROLLMENT_ANGULAR_SERVICEACCOUNT_NAME: ${{ steps.get_main_outputs.outputs.enrollment_angular_serviceaccount_name }}
+        ENROLLMENT_APP_NAMESPACE: ${{ steps.get_main_outputs.outputs.enrollment_app_namespace }}
+      run: |
+        sed -e "s|LOAD_BALANCER_IP|${{ env.LOAD_BALANCER_IP }}|g" \
+        -e "s|APP_INSIGHTS_CONNECTION_STRING|${{ env.APP_INSIGHTS_CONNECTION_STRING }}|g" \
+        -e "s|ENROLLMENT_API_IDENTITY_CLIENTID|${{ env.ENROLLMENT_API_IDENTITY_CLIENTID }}|g" \
+        -e "s|ENROLLMENT_BSL_IDENTITY_CLIENTID|${{ env.ENROLLMENT_BSL_IDENTITY_CLIENTID }}|g" \
+        -e "s|ENROLLMENT_KENDO_GRID_API_IDENTITY_CLIENTID|${{ env.ENROLLMENT_KENDO_GRID_API_IDENTITY_CLIENTID }}|g" \
+        -e "s|ENROLLMENT_KENDO_GRID_BSL_IDENTITY_CLIENTID|${{ env.ENROLLMENT_KENDO_GRID_BSL_IDENTITY_CLIENTID }}|g" \
+        -e "s|ENROLLMENT_CHAT_HUB_IDENTITY_CLIENTID|${{ env.ENROLLMENT_CHAT_HUB_IDENTITY_CLIENTID }}|g" \
+        -e "s|ENROLLMENT_SPA_API_IDENTITY_CLIENTID|${{ env.ENROLLMENT_SPA_API_IDENTITY_CLIENTID }}|g" \
+        -e "s|ENROLLMENT_ANGULAR_IDENTITY_CLIENTID|${{ env.ENROLLMENT_ANGULAR_IDENTITY_CLIENTID }}|g" \
+        -e "s|ENROLLMENT_API_SERVICEACCOUNT_NAME|${{ env.ENROLLMENT_API_SERVICEACCOUNT_NAME }}|g" \
+        -e "s|ENROLLMENT_BSL_SERVICEACCOUNT_NAME|${{ env.ENROLLMENT_BSL_SERVICEACCOUNT_NAME }}|g" \
+        -e "s|ENROLLMENT_KENDO_GRID_API_SERVICEACCOUNT_NAME|${{ env.ENROLLMENT_KENDO_GRID_API_SERVICEACCOUNT_NAME }}|g" \
+        -e "s|ENROLLMENT_KENDO_GRID_BSL_SERVICEACCOUNT_NAME|${{ env.ENROLLMENT_KENDO_GRID_BSL_SERVICEACCOUNT_NAME }}|g" \
+        -e "s|ENROLLMENT_CHAT_HUB_SERVICEACCOUNT_NAME|${{ env.ENROLLMENT_CHAT_HUB_SERVICEACCOUNT_NAME }}|g" \
+        -e "s|ENROLLMENT_SPA_API_SERVICEACCOUNT_NAME|${{ env.ENROLLMENT_SPA_API_SERVICEACCOUNT_NAME }}|g" \
+        -e "s|ENROLLMENT_ANGULAR_SERVICEACCOUNT_NAME|${{ env.ENROLLMENT_ANGULAR_SERVICEACCOUNT_NAME }}|g" \
+        -e "s|ENROLLMENT_APP_NAMESPACE|${{ env.ENROLLMENT_APP_NAMESPACE }}|g" \
+        -e "s|IMAGE_TAG|v1.0.0|g" \
+        kubernetes/services.yaml | tee /dev/tty | kubectl apply -f - -n ${{ env.ENROLLMENT_APP_NAMESPACE }}
+
+  trigger-cd-pipelines:
+    name: Deploy Services
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    needs: apply-service-manifests
+    strategy:
+      fail-fast: false 
+      matrix:
+        repo:
+          - "LogicBuilder.Samples.Enrollment.Angular"
+          - "LogicBuilder.Samples.Enrollment.ChatHub"
+          - "LogicBuilder.Samples.Enrollment.KendoGrid.Services"
+          - "LogicBuilder.Samples.Enrollment.Services"
+          - "LogicBuilder.Samples.Enrollment.Spa.Flow"
+    steps:
+      - name: Generate GitHub App Token
+        id: repo-access-app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.CROSS_REPO_ACCESS_APP_CLIENT_ID }}
+          private-key: ${{ secrets.CROSS_REPO_ACCESS_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ matrix.repo }}
+
+      - name: Trigger App Deployment
+        run: gh workflow run cd-aks.yml --repo "${{ format('{0}/{1}', github.repository_owner, matrix.repo) }}" --ref "master"
+        env:
+          GH_TOKEN: ${{ steps.repo-access-app-token.outputs.token }}
