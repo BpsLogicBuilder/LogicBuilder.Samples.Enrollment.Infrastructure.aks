@@ -208,7 +208,7 @@ jobs:
         echo "::add-mask::$ENROLLMENT_BSL_IDENTITY_CLIENTID"
         echo "enrollment_bsl_identity_clientid=$ENROLLMENT_BSL_IDENTITY_CLIENTID" >> $GITHUB_OUTPUT
 
-        ENROLLMENT_KENDO_GRID_API_IDENTITY_CLIENTID=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.enrollmentKendoGridApiManagedIdentityClientId.value -o tsv)
+        ENROLLMENT_KENDO_GRID_API_IDENTITY_CLIENTID=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.enrollmentKendoGridApiManagedIdentityClientId.value -o tsv | tr -d '\r')
         echo "::add-mask::$ENROLLMENT_KENDO_GRID_API_IDENTITY_CLIENTID"
         echo "enrollment_kendo_grid_api_identity_clientid=$ENROLLMENT_KENDO_GRID_API_IDENTITY_CLIENTID" >> $GITHUB_OUTPUT
 
@@ -236,7 +236,7 @@ jobs:
         echo "::add-mask::$ENROLLMENT_BSL_SERVICEACCOUNT_NAME"
         echo "enrollment_bsl_serviceaccount_name=$ENROLLMENT_BSL_SERVICEACCOUNT_NAME" >> $GITHUB_OUTPUT
 
-        ENROLLMENT_KENDO_GRID_API_SERVICEACCOUNT_NAME=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.enrollmentKendoGridApiServiceAccountName.value -o tsv)
+        ENROLLMENT_KENDO_GRID_API_SERVICEACCOUNT_NAME=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.enrollmentKendoGridApiServiceAccountName.value -o tsv | tr -d '\r')
         echo "::add-mask::$ENROLLMENT_KENDO_GRID_API_SERVICEACCOUNT_NAME"
         echo "enrollment_kendo_grid_api_serviceaccount_name=$ENROLLMENT_KENDO_GRID_API_SERVICEACCOUNT_NAME" >> $GITHUB_OUTPUT
 
@@ -298,7 +298,7 @@ jobs:
         -e "s|ENROLLMENT_ANGULAR_SERVICEACCOUNT_NAME|${{ env.ENROLLMENT_ANGULAR_SERVICEACCOUNT_NAME }}|g" \
         -e "s|ENROLLMENT_APP_NAMESPACE|${{ env.ENROLLMENT_APP_NAMESPACE }}|g" \
         -e "s|IMAGE_TAG|v1.0.0|g" \
-        kubernetes/services.yaml | tee /dev/tty | kubectl apply -f - -n ${{ env.ENROLLMENT_APP_NAMESPACE }}
+        kubernetes/services.yaml | tee /dev/stderr | kubectl apply -f - -n ${{ env.ENROLLMENT_APP_NAMESPACE }}
 
   trigger-cd-pipelines:
     name: Deploy Services
