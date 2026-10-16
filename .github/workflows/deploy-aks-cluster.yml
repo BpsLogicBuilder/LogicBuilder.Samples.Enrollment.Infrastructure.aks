@@ -209,7 +209,7 @@ jobs:
         echo "enrollment_bsl_identity_clientid=$ENROLLMENT_BSL_IDENTITY_CLIENTID" >> $GITHUB_OUTPUT
 
         ENROLLMENT_KENDO_GRID_API_IDENTITY_CLIENTID=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.enrollmentKendoGridApiManagedIdentityClientId.value -o tsv | tr -d '\r')
-        # echo "::add-mask::$ENROLLMENT_KENDO_GRID_API_IDENTITY_CLIENTID"
+        echo "::add-mask::$ENROLLMENT_KENDO_GRID_API_IDENTITY_CLIENTID"
         echo "enrollment_kendo_grid_api_identity_clientid=$ENROLLMENT_KENDO_GRID_API_IDENTITY_CLIENTID" >> $GITHUB_OUTPUT
 
         ENROLLMENT_KENDO_GRID_BSL_IDENTITY_CLIENTID=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.enrollmentKendoGridBslManagedIdentityClientId.value -o tsv)
@@ -237,7 +237,7 @@ jobs:
         echo "enrollment_bsl_serviceaccount_name=$ENROLLMENT_BSL_SERVICEACCOUNT_NAME" >> $GITHUB_OUTPUT
 
         ENROLLMENT_KENDO_GRID_API_SERVICEACCOUNT_NAME=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.enrollmentKendoGridApiServiceAccountName.value -o tsv | tr -d '\r')
-        # echo "::add-mask::$ENROLLMENT_KENDO_GRID_API_SERVICEACCOUNT_NAME"
+        echo "::add-mask::$ENROLLMENT_KENDO_GRID_API_SERVICEACCOUNT_NAME"
         echo "enrollment_kendo_grid_api_serviceaccount_name=$ENROLLMENT_KENDO_GRID_API_SERVICEACCOUNT_NAME" >> $GITHUB_OUTPUT
 
         ENROLLMENT_KENDO_GRID_BSL_SERVICEACCOUNT_NAME=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query properties.outputs.enrollmentKendoGridBslServiceAccountName.value -o tsv)
