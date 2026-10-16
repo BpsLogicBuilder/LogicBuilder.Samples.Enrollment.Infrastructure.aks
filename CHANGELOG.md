@@ -1,3 +1,4 @@
+* 2026-10-16 - AB#248: Unmask service name for debugging.
 * 2026-10-16 - AB#248: Debug broken service name.
 * 2026-10-16 - AB#248: Kick of service deployments after infrastructure deployment.
 * 2026-10-15 - AB#243: Update manifests and bicep to include the chat hub.
